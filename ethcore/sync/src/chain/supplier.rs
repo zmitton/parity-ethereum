@@ -39,6 +39,7 @@ use super::{
 	GET_RECEIPTS_PACKET,
 	GET_SNAPSHOT_DATA_PACKET,
 	GET_SNAPSHOT_MANIFEST_PACKET,
+	GET_FAST_WARP_DATA_PACKET,
 	MAX_BODIES_TO_SEND,
 	MAX_HEADERS_TO_SEND,
 	MAX_NODE_DATA_TO_SEND,
@@ -48,6 +49,7 @@ use super::{
 	RECEIPTS_PACKET,
 	SNAPSHOT_DATA_PACKET,
 	SNAPSHOT_MANIFEST_PACKET,
+	FAST_WARP_DATA_PACKET,
 	STATUS_PACKET,
 	TRANSACTIONS_PACKET,
 };
@@ -84,6 +86,10 @@ impl SyncSupplier {
 			GET_SNAPSHOT_DATA_PACKET => SyncSupplier::return_rlp(io, &rlp, peer,
 				SyncSupplier::return_snapshot_data,
 				|e| format!("Error sending snapshot data: {:?}", e)),
+
+			GET_FAST_WARP_DATA_PACKET => SyncSupplier::return_rlp(io, &rlp, peer,
+				SyncSupplier::return_fast_warp_data,
+				|e| format!("Error sending fast-warp data: {:?}", e)),
 
 			STATUS_PACKET => {
 				sync.write().on_packet(io, peer, packet_id, data);
@@ -313,6 +319,16 @@ impl SyncSupplier {
 			}
 		};
 		Ok(Some((SNAPSHOT_DATA_PACKET, rlp)))
+	}
+
+	/// Respond to GetFastWarp request
+	fn return_fast_warp_data(io: &SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
+		let account_from: H256 = r.val_at(0)?;
+		let storage_from: H256 = r.val_at(1)?;
+		trace!(target: "sync", "{} -> GetFastWarpData from {:?}::{:?}", peer_id, account_from, storage_from);
+
+		let rlp = RlpStream::new_list(0);
+		Ok(Some((FAST_WARP_DATA_PACKET, rlp)))
 	}
 
 	fn return_rlp<FRlp, FError>(io: &mut SyncIo, rlp: &Rlp, peer: PeerId, rlp_func: FRlp, error_func: FError) -> Result<(), PacketDecodeError>

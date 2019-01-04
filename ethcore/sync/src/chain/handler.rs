@@ -46,7 +46,7 @@ use super::{
 	MAX_NEW_BLOCK_AGE,
 	MAX_NEW_HASHES,
 	PAR_PROTOCOL_VERSION_1,
-	PAR_PROTOCOL_VERSION_3,
+	PAR_PROTOCOL_VERSION_4,
 	BLOCK_BODIES_PACKET,
 	BLOCK_HEADERS_PACKET,
 	NEW_BLOCK_HASHES_PACKET,
@@ -600,7 +600,7 @@ impl SyncHandler {
 		}
 
 		if false
-			|| (warp_protocol && (peer.protocol_version < PAR_PROTOCOL_VERSION_1.0 || peer.protocol_version > PAR_PROTOCOL_VERSION_3.0))
+			|| (warp_protocol && (peer.protocol_version < PAR_PROTOCOL_VERSION_1.0 || peer.protocol_version > PAR_PROTOCOL_VERSION_4.0))
 			|| (!warp_protocol && (peer.protocol_version < ETH_PROTOCOL_VERSION_62.0 || peer.protocol_version > ETH_PROTOCOL_VERSION_63.0))
 		{
 			trace!(target: "sync", "Peer {} unsupported eth protocol ({})", peer_id, peer.protocol_version);

@@ -136,6 +136,8 @@ pub const PAR_PROTOCOL_VERSION_1: (u8, u8) = (1, 0x15);
 pub const PAR_PROTOCOL_VERSION_2: (u8, u8) = (2, 0x16);
 /// 3 version of Parity protocol (private transactions messages added).
 pub const PAR_PROTOCOL_VERSION_3: (u8, u8) = (3, 0x18);
+/// 3 version of Parity protocol (fast warp added).
+pub const PAR_PROTOCOL_VERSION_4: (u8, u8) = (4, 0x20);
 
 pub const MAX_BODIES_TO_SEND: usize = 256;
 pub const MAX_HEADERS_TO_SEND: usize = 512;
@@ -176,6 +178,9 @@ pub const CONSENSUS_DATA_PACKET: u8 = 0x15;
 pub const PRIVATE_TRANSACTION_PACKET: u8 = 0x16;
 pub const SIGNED_PRIVATE_TRANSACTION_PACKET: u8 = 0x17;
 
+pub const GET_FAST_WARP_DATA_PACKET: u8 = 0x18;
+pub const FAST_WARP_DATA_PACKET: u8 = 0x19;
+
 const MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD: usize = 3;
 
 const WAIT_PEERS_TIMEOUT: Duration = Duration::from_secs(5);
@@ -186,6 +191,7 @@ const RECEIPTS_TIMEOUT: Duration = Duration::from_secs(10);
 const FORK_HEADER_TIMEOUT: Duration = Duration::from_secs(3);
 const SNAPSHOT_MANIFEST_TIMEOUT: Duration = Duration::from_secs(5);
 const SNAPSHOT_DATA_TIMEOUT: Duration = Duration::from_secs(120);
+const FAST_WARP_DATA_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Defines how much time we have to complete priority transaction or block propagation.
 /// after the deadline is reached the task is considered finished
@@ -284,6 +290,7 @@ pub enum PeerAsking {
 	BlockReceipts,
 	SnapshotManifest,
 	SnapshotData,
+	FastWarpData,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -1152,6 +1159,7 @@ impl ChainSync {
 				PeerAsking::ForkHeader => elapsed > FORK_HEADER_TIMEOUT,
 				PeerAsking::SnapshotManifest => elapsed > SNAPSHOT_MANIFEST_TIMEOUT,
 				PeerAsking::SnapshotData => elapsed > SNAPSHOT_DATA_TIMEOUT,
+				PeerAsking::FastWarpData => elapsed > FAST_WARP_DATA_TIMEOUT,
 			};
 			if timeout {
 				debug!(target:"sync", "Timeout {}", peer_id);

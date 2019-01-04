@@ -34,6 +34,7 @@ use super::{
 	GET_RECEIPTS_PACKET,
 	GET_SNAPSHOT_DATA_PACKET,
 	GET_SNAPSHOT_MANIFEST_PACKET,
+	GET_FAST_WARP_DATA_PACKET,
 };
 
 /// The Chain Sync Requester: requesting data to other peers
@@ -130,6 +131,15 @@ impl SyncRequester {
 		let mut rlp = RlpStream::new_list(1);
 		rlp.append(chunk);
 		SyncRequester::send_request(sync, io, peer_id, PeerAsking::SnapshotData, GET_SNAPSHOT_DATA_PACKET, rlp.out());
+	}
+
+	/// Request fast-warp data from a peer
+	fn request_fast_warp_data(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, account_from: &H256, storage_from: &H256) {
+		trace!(target: "sync", "{} <- GetFastWarpData from {:?}::{:?}", peer_id, account_from, storage_from);
+		let mut rlp = RlpStream::new_list(2);
+		rlp.append(account_from);
+		rlp.append(storage_from);
+		SyncRequester::send_request(sync, io, peer_id, PeerAsking::FastWarpData, GET_FAST_WARP_DATA_PACKET, rlp.out());
 	}
 
 	/// Generic request sender
