@@ -56,6 +56,7 @@ use super::{
 	SIGNED_PRIVATE_TRANSACTION_PACKET,
 	SNAPSHOT_DATA_PACKET,
 	SNAPSHOT_MANIFEST_PACKET,
+	FAST_WARP_DATA_PACKET,
 	STATUS_PACKET,
 };
 
@@ -75,6 +76,7 @@ impl SyncHandler {
 			NEW_BLOCK_HASHES_PACKET => SyncHandler::on_peer_new_hashes(sync, io, peer, &rlp),
 			SNAPSHOT_MANIFEST_PACKET => SyncHandler::on_snapshot_manifest(sync, io, peer, &rlp),
 			SNAPSHOT_DATA_PACKET => SyncHandler::on_snapshot_data(sync, io, peer, &rlp),
+			FAST_WARP_DATA_PACKET => SyncHandler::on_fast_warp_data(sync, io, peer, &rlp),
 			PRIVATE_TRANSACTION_PACKET => SyncHandler::on_private_transaction(sync, io, peer, &rlp),
 			SIGNED_PRIVATE_TRANSACTION_PACKET => SyncHandler::on_signed_private_transaction(sync, io, peer, &rlp),
 			_ => {
@@ -344,8 +346,16 @@ impl SyncHandler {
 				peer.confirmation = ForkConfirmation::Confirmed;
 
 				if !io.chain_overlay().read().contains_key(&fork_number) {
+					use std::fs::File;
+					use std::io::prelude::*;
+
+					let header_bytes = header.to_vec();
+
+					let mut file = File::create("/tmp/fork-header").expect("Couldn't create fork-header file.");
+					file.write_all(&header_bytes).expect("Couldn't write fork-header file.");
+
 					trace!(target: "sync", "Inserting (fork) block {} header", fork_number);
-					io.chain_overlay().write().insert(fork_number, header.to_vec());
+					io.chain_overlay().write().insert(fork_number, header_bytes);
 				}
 			}
 		}
@@ -553,6 +563,46 @@ impl SyncHandler {
 		Ok(())
 	}
 
+	fn on_fast_warp_data(sync: &mut ChainSync, _io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
+		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
+			trace!(target: "sync", "Ignoring snapshot data from unconfirmed peer {}", peer_id);
+			return Ok(());
+		}
+		sync.clear_peer_download(peer_id);
+		if !sync.reset_peer_asking(peer_id, PeerAsking::FastWarpData) || sync.state != SyncState::FastWarp {
+			trace!(target: "sync", "{}: Ignored unexpected fast-warp data", peer_id);
+			return Ok(());
+		}
+
+		let mut last_account_hash: H256 = H256::zero();
+		let mut last_storage_key: H256 = H256::zero();
+		let mut num_accounts = 0;
+
+		for account_rlp in r.iter() {
+			num_accounts += 1;
+
+			let account_hash: H256 = account_rlp.val_at(0).expect("Invalid account_hash");
+			last_account_hash = account_hash;
+
+			let storage_rlp = account_rlp.at(2).expect("Invalid storage_rlp");
+			let storage_count = storage_rlp.item_count().expect("Invalid storage_count");
+
+			if storage_count == 0 { continue; }
+			let last_storage_rlp = storage_rlp.at(storage_count - 1).expect("Invalid last_storage_rlp");
+
+			let last_key: H256 = last_storage_rlp.val_at(0).expect("Invalid last_key");
+			last_storage_key = last_key;
+		}
+
+		println!("Got fast-warp data up to {}::{} ({} accounts)", last_account_hash, last_storage_key, num_accounts);
+
+		if let Some(ref mut peer) = sync.peers.get_mut(&peer_id) {
+			peer.fast_warp = (last_account_hash, last_storage_key);
+		}
+
+		Ok(())
+	}
+
 	/// Called by peer to report status
 	fn on_peer_status(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
 		sync.handshaking_peers.remove(&peer_id);
@@ -576,6 +626,7 @@ impl SyncHandler {
 			snapshot_hash: if warp_protocol { Some(r.val_at(5)?) } else { None },
 			snapshot_number: if warp_protocol { Some(r.val_at(6)?) } else { None },
 			block_set: None,
+			fast_warp: (H256::zero(), H256::zero()),
 		};
 
 		trace!(target: "sync", "New peer {} (protocol: {}, network: {:?}, difficulty: {:?}, latest:{}, genesis:{}, snapshot:{:?})",

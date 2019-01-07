@@ -327,7 +327,22 @@ impl SyncSupplier {
 		let storage_from: H256 = r.val_at(1)?;
 		trace!(target: "sync", "{} -> GetFastWarpData from {:?}::{:?}", peer_id, account_from, storage_from);
 
-		let rlp = RlpStream::new_list(0);
+		let start = ::std::time::Instant::now();
+		let rlp = match io.chain().fast_warp_data(&account_from, &storage_from) {
+			Ok(bytes) => {
+				let elapsed = start.elapsed();
+				println!("Generated Fast-Warp data: {}bytes in {}secs", bytes.len(), elapsed.as_secs());
+
+				let mut rlp = RlpStream::new();
+				rlp.append_raw(&bytes, 1);
+				rlp
+			},
+			Err(e) => {
+				error!(target: "sync", "Error getting fast-warp data: {:?}", e);
+				RlpStream::new_list(0)
+			}
+		};
+
 		Ok(Some((FAST_WARP_DATA_PACKET, rlp)))
 	}
 

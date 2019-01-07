@@ -30,9 +30,13 @@ use trie::{TrieSpec, TrieFactory, Trie};
 use kvdb::{DBValue, KeyValueDB, DBTransaction};
 
 // other
+use account_db::{AccountDB, AccountDBMut};
 use ethereum_types::{H256, Address, U256};
 use block::{IsBlock, LockedBlock, Drain, ClosedBlock, OpenBlock, enact_verified, SealedBlock};
-use blockchain::{BlockReceipts, BlockChain, BlockChainDB, BlockProvider, TreeRoute, ImportRoute, TransactionAddress, ExtrasInsert};
+use blockchain::{
+	BlockReceipts, BlockChain, BlockChainDB, BlockProvider,
+	TreeRoute, ImportRoute, TransactionAddress, ExtrasInsert,
+};
 use client::ancient_import::AncientVerifier;
 use client::{
 	Nonce, Balance, ChainInfo, BlockInfo, CallContract, TransactionInfo,
@@ -54,6 +58,7 @@ use error::{
 	ImportErrorKind, ExecutionError, CallError, BlockError,
 	QueueError, QueueErrorKind, Error as EthcoreError, EthcoreResult, ErrorKind as EthcoreErrorKind
 };
+use ethtrie::{TrieDB, TrieDBMut};
 use vm::{EnvInfo, LastHashes};
 use evm::Schedule;
 use executive::{Executive, Executed, TransactOptions, contract_address};
@@ -74,11 +79,14 @@ use trace;
 use trace::{TraceDB, ImportRequest as TraceImportRequest, LocalizedTrace, Database as TraceDatabase};
 use transaction::{self, LocalizedTransaction, UnverifiedTransaction, SignedTransaction, Transaction, Action};
 use types::filter::Filter;
+use types::basic_account::BasicAccount;
 use types::ancestry_action::AncestryAction;
 use verification;
 use verification::{PreverifiedBlock, Verifier, BlockQueue};
 use verification::queue::kind::blocks::Unverified;
 use verification::queue::kind::BlockLike;
+use hashdb::HashDB;
+use rlp::{RlpStream, Rlp};
 
 // re-export
 pub use types::blockchain_info::BlockChainInfo;
@@ -1888,6 +1896,103 @@ impl BlockChainClient for Client {
 
 	fn block_receipts(&self, hash: &H256) -> Option<BlockReceipts> {
 		self.chain.read().block_receipts(hash)
+	}
+
+	fn fast_warp_data(&self, account_from: &H256, storage_from: &H256) -> EthcoreResult<Bytes> {
+		// Maximum 4Mb packets
+		const MAX_SIZE: usize = 1024 * 1024 * 4;
+
+		let db = self.state_db.read().journal_db().boxed_clone();
+		let state_db = db.as_hashdb();
+		let chain = self.chain.read();
+
+		let block_hash = self.block_hash(BlockId::Latest).expect("[fast_warp_data] Could not get latest block_hash");
+		let start_header = chain.block_header_data(&block_hash).expect("[fast_warp_data] Invalid block hash");
+		let state_root = start_header.state_root();
+
+		let account_trie = TrieDB::new(state_db, &state_root)?;
+		let mut account_iter = account_trie.iter()?;
+
+		account_iter.seek(&account_from)?;
+
+		let mut rlps = RlpStream::new();
+		let mut total_bytes = 0;
+		let mut total_accounts = 0;
+
+		rlps.begin_unbounded_list();
+
+		for item in account_iter {
+			// [ account_hash ; account_data ; account_storage ]
+			// 		where account_data = [ nonce ; balance ; (opt) code ]
+			// 		where account_storage = [ [ k_0 ; v_0 ] ; ... ]
+			let mut account_rlp = RlpStream::new_list(3);
+
+			let (account_key, account_data) = item?;
+			let account_hash = H256::from_slice(&account_key);
+
+			let account: BasicAccount = ::rlp::decode(&*account_data)?;
+			let account_db = AccountDB::from_hash(state_db, account_hash);
+
+			let storage_db = TrieDB::new(&account_db, &account.storage_root)?;
+			let mut storage_db_iter = storage_db.iter()?;
+
+			storage_db_iter.seek(&storage_from)?;
+
+			account_rlp.append(&account_hash);
+			total_bytes += 32;
+
+			// Account Data
+			account_rlp.begin_unbounded_list();
+
+			account_rlp
+				.append(&account.nonce)
+				.append(&account.balance);
+			total_bytes += 64;
+
+			match account_db.get(&account.code_hash) {
+				Some(c) => {
+					total_bytes += c.len();
+					account_rlp.append(&&*c);
+				},
+				None => (),
+			}
+
+			account_rlp.complete_unbounded_list();
+
+			// Account Storage
+			account_rlp.begin_unbounded_list();
+
+			loop {
+				match storage_db_iter.next() {
+					Some(value) => {
+						let (key, value) = value?;
+						account_rlp.begin_list(2);
+						account_rlp.append(&key).append(&&*value);
+						total_bytes += 64;
+					},
+					None => {
+						break;
+					},
+				}
+
+				if total_bytes > MAX_SIZE {
+					break;
+				}
+			}
+
+			account_rlp.complete_unbounded_list();
+
+			rlps.append_raw(&account_rlp.drain(), 1);
+			total_accounts += 1;
+
+			if total_bytes > MAX_SIZE {
+				break;
+			}
+		}
+
+		println!("Generated fast-warp data for {} accounts", total_accounts);
+		rlps.complete_unbounded_list();
+		Ok(rlps.drain())
 	}
 
 	fn queue_info(&self) -> BlockQueueInfo {

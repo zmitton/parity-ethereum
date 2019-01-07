@@ -134,7 +134,7 @@ impl SyncRequester {
 	}
 
 	/// Request fast-warp data from a peer
-	fn request_fast_warp_data(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, account_from: &H256, storage_from: &H256) {
+	pub fn request_fast_warp_data(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, account_from: &H256, storage_from: &H256) {
 		trace!(target: "sync", "{} <- GetFastWarpData from {:?}::{:?}", peer_id, account_from, storage_from);
 		let mut rlp = RlpStream::new_list(2);
 		rlp.append(account_from);

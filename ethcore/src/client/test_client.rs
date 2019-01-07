@@ -801,6 +801,10 @@ impl BlockChainClient for TestBlockChainClient {
 		None
 	}
 
+	fn fast_warp_data(&self, _account_from: &H256, _storage_from: &H256) -> EthcoreResult<Bytes> {
+		Ok(Bytes::new())
+	}
+
 	fn queue_info(&self) -> QueueInfo {
 		QueueInfo {
 			verified_queue_size: self.queue_size.load(AtomicOrder::Relaxed),

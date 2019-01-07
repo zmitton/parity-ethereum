@@ -217,6 +217,8 @@ pub enum SyncState {
 	Waiting,
 	/// Downloading blocks learned from `NewHashes` packet
 	NewBlocks,
+	/// Downloading fast-warp data
+	FastWarp,
 }
 
 /// Syncing status and statistics
@@ -348,6 +350,8 @@ pub struct PeerInfo {
 	snapshot_number: Option<BlockNumber>,
 	/// Block set requested
 	block_set: Option<BlockSet>,
+	/// Next fast_warp chunk to ask
+	fast_warp: (H256, H256),
 }
 
 impl PeerInfo {
@@ -581,6 +585,10 @@ impl ChainSync {
 	}
 
 	fn get_init_state(warp_sync: WarpSync, chain: &BlockChainClient) -> SyncState {
+		if ::std::env::var("FAST").is_ok() {
+			return SyncState::FastWarp;
+		}
+
 		let best_block = chain.chain_info().best_block_number;
 		match warp_sync {
 			WarpSync::Enabled => SyncState::WaitingPeers,
@@ -668,6 +676,7 @@ impl ChainSync {
 			private_tx_handler,
 			warp_sync: config.warp_sync,
 		};
+
 		sync.update_targets(chain);
 		sync
 	}
@@ -932,7 +941,7 @@ impl ChainSync {
 			return;
 		}
 		let (peer_latest, peer_difficulty, peer_snapshot_number, peer_snapshot_hash) = {
-			if let Some(peer) = self.peers.get_mut(&peer_id) {
+			if let Some(peer) = self.peers.get(&peer_id) {
 				if peer.asking != PeerAsking::Nothing || !peer.can_sync() {
 					trace!(target: "sync", "Skipping busy peer {}", peer_id);
 					return;
@@ -958,6 +967,11 @@ impl ChainSync {
 						peer_id
 					);
 					self.maybe_start_snapshot_sync(io);
+				},
+				SyncState::FastWarp => {
+					let (account_from, storage_from) = self.peers.get(&peer_id).map(|p| p.fast_warp).unwrap_or_default();
+					SyncRequester::request_fast_warp_data(self, io, peer_id, &account_from, &storage_from);
+					return;
 				},
 				SyncState::Idle | SyncState::Blocks | SyncState::NewBlocks => {
 					if io.chain().queue_info().is_full() {
@@ -1264,6 +1278,21 @@ impl ChainSync {
 
 	/// Maintain other peers. Send out any new blocks and transactions
 	pub fn maintain_sync(&mut self, io: &mut SyncIo) {
+		if let Some((fork_number, _)) = self.fork_block {
+			if !io.chain_overlay().read().contains_key(&fork_number) {
+				use std::fs;
+
+				match fs::read("/tmp/fork-header") {
+					Err(_) => (),
+					Ok(header_bytes) => {
+						println!("Got fork-header from file!");
+
+						io.chain_overlay().write().insert(fork_number, header_bytes);
+					},
+				}
+			}
+		}
+
 		self.maybe_start_snapshot_sync(io);
 		self.check_resume(io);
 	}

@@ -297,6 +297,9 @@ pub trait BlockChainClient : Sync + Send + AccountData + BlockChain + CallContra
 	/// Get block receipts data by block header hash.
 	fn block_receipts(&self, hash: &H256) -> Option<BlockReceipts>;
 
+	/// Get fast warp data
+	fn fast_warp_data(&self, account_from: &H256, storage_from: &H256) -> EthcoreResult<Bytes>;
+
 	/// Get block queue information.
 	fn queue_info(&self) -> BlockQueueInfo;
 
