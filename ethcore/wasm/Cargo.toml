@@ -12,6 +12,9 @@ libc = "0.2"
 pwasm-utils = "0.6.1"
 vm = { path = "../vm" }
 wasmi = "0.3.0"
+pwasm-exec = { path = "pwasm" }
+ewasm-exec = { path = "ewasm" }
+wasm-exec-common = { path = "common" }
 
 [dev-dependencies]
 env_logger = "0.5"
