@@ -23,14 +23,15 @@ extern crate env_logger;
 
 pub enum WasmKind {
         PWasm,
-        //EWasm
+        EWasm
 }
 
 
 pub fn new(kind: WasmKind, params: vm::ActionParams) -> Box<vm::Exec> {
-        Box::new(
-                match kind {
-                        WasmKind::PWasm => pwasm_exec::interpreter::WasmInterpreter::new(params),
-                }
-        )
+        match kind {
+                WasmKind::PWasm =>
+                        Box::new(pwasm_exec::interpreter::WasmInterpreter::new(params)),
+                WasmKind::EWasm =>
+                        Box::new(ewasm_exec::interpreter::WasmInterpreter::new(params))
+        }
 }
