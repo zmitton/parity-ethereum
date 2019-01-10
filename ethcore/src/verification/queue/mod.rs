@@ -1,18 +1,18 @@
-// Copyright 2015-2018 Parity Technologies (UK) Ltd.
-// This file is part of Parity.
+// Copyright 2015-2019 Parity Technologies (UK) Ltd.
+// This file is part of Parity Ethereum.
 
-// Parity is free software: you can redistribute it and/or modify
+// Parity Ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Parity is distributed in the hope that it will be useful,
+// Parity Ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Parity.  If not, see <http://www.gnu.org/licenses/>.
+// along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 //! A queue of blocks. Sits between network or other I/O and the `BlockChain`.
 //! Sorts them ready for blockchain insertion.
@@ -117,9 +117,9 @@ pub enum Status {
 	Unknown,
 }
 
-impl Into<::block_status::BlockStatus> for Status {
-	fn into(self) -> ::block_status::BlockStatus {
-		use ::block_status::BlockStatus;
+impl Into<::types::block_status::BlockStatus> for Status {
+	fn into(self) -> ::types::block_status::BlockStatus {
+		use ::types::block_status::BlockStatus;
 		match self {
 			Status::Queued => BlockStatus::Queued,
 			Status::Bad => BlockStatus::Bad,
@@ -744,8 +744,9 @@ mod tests {
 	use super::kind::blocks::Unverified;
 	use test_helpers::{get_good_dummy_block_seq, get_good_dummy_block};
 	use error::*;
-	use views::BlockView;
 	use bytes::Bytes;
+	use types::view;
+	use types::views::BlockView;
 
 	// create a test block queue.
 	// auto_scaling enables verifier adjustment.

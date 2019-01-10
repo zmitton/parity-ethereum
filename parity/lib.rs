@@ -1,18 +1,18 @@
-// Copyright 2015-2018 Parity Technologies (UK) Ltd.
-// This file is part of Parity.
+// Copyright 2015-2019 Parity Technologies (UK) Ltd.
+// This file is part of Parity Ethereum.
 
-// Parity is free software: you can redistribute it and/or modify
+// Parity Ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Parity is distributed in the hope that it will be useful,
+// Parity Ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Parity.  If not, see <http://www.gnu.org/licenses/>.
+// along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Ethcore client application.
 
@@ -23,7 +23,6 @@ extern crate docopt;
 #[macro_use]
 extern crate clap;
 extern crate dir;
-extern crate env_logger;
 extern crate futures;
 extern crate atty;
 extern crate jsonrpc_core;
@@ -43,8 +42,10 @@ extern crate toml;
 
 extern crate blooms_db;
 extern crate cli_signer;
+extern crate common_types as types;
 extern crate ethcore;
 extern crate parity_bytes as bytes;
+extern crate ethcore_db;
 extern crate ethcore_io as io;
 extern crate ethcore_light as light;
 extern crate ethcore_logger;
@@ -53,8 +54,8 @@ extern crate ethcore_network as network;
 extern crate ethcore_private_tx;
 extern crate ethcore_service;
 extern crate ethcore_sync as sync;
-extern crate ethcore_transaction as transaction;
 extern crate ethereum_types;
+extern crate ethstore;
 extern crate ethkey;
 extern crate kvdb;
 extern crate parity_hash_fetch as hash_fetch;
@@ -165,7 +166,6 @@ fn run_deadlock_detection_thread() {
 		}
 	});
 }
-
 
 /// Action that Parity performed when running `start`.
 pub enum ExecutionAction {

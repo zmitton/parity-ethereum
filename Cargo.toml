@@ -9,7 +9,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 blooms-db = { path = "util/blooms-db" }
 log = "0.4"
-env_logger = "0.5"
 rustc-hex = "1.0"
 docopt = "1.0"
 clap = "2"
@@ -33,15 +32,18 @@ ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
 jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc.git", branch = "parity-2.2" }
 ethcore = { path = "ethcore", features = ["parity"] }
 parity-bytes = "0.1"
+common-types = { path = "ethcore/types" }
+ethcore-blockchain = { path = "ethcore/blockchain" }
+ethcore-db = { path = "ethcore/db" }
 ethcore-io = { path = "util/io" }
 ethcore-light = { path = "ethcore/light" }
-ethcore-logger = { path = "logger" }
+ethcore-logger = { path = "parity/logger" }
 ethcore-miner = { path = "miner" }
 ethcore-network = { path = "util/network" }
 ethcore-private-tx = { path = "ethcore/private-tx" }
 ethcore-service = { path = "ethcore/service" }
 ethcore-sync = { path = "ethcore/sync" }
-ethcore-transaction = { path = "ethcore/transaction" }
+ethstore = { path = "accounts/ethstore" }
 ethereum-types = "0.4"
 node-filter = { path = "ethcore/node-filter" }
 ethkey = { path = "accounts/ethkey" }
