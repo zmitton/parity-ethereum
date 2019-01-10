@@ -1,0 +1,11 @@
+[package]
+name = "cache-utils"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Parity-Ethereum Cache utils"
+license = "GPL3"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

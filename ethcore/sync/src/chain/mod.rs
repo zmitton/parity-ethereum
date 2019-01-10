@@ -351,8 +351,6 @@ pub struct PeerInfo {
 	snapshot_number: Option<BlockNumber>,
 	/// Block set requested
 	block_set: Option<BlockSet>,
-	/// Next fast_warp chunk to ask
-	fast_warp: (H256, H256),
 }
 
 impl PeerInfo {
@@ -607,6 +605,35 @@ enum PeerState {
 	SameBlock
 }
 
+use std::path::PathBuf;
+
+pub struct FastWarp {
+	current_account_from: H256,
+	current_storage_from: H256,
+}
+
+impl FastWarp {
+	pub fn new() -> FastWarp {
+		FastWarp {
+			current_account_from: H256::zero(),
+			current_storage_from: H256::zero(),
+		}
+	}
+
+	fn db_path () -> PathBuf {
+		PathBuf::from("/tmp/fast-warp")
+	}
+
+	pub fn update(&mut self, account_from: H256, storage_from: H256) {
+		self.current_account_from = account_from;
+		self.current_storage_from = storage_from;
+	}
+
+	pub fn get_request(&self) -> (H256, H256) {
+		(self.current_account_from, self.current_storage_from)
+	}
+}
+
 /// Blockchain sync handler.
 /// See module documentation for more details.
 pub struct ChainSync {
@@ -645,6 +672,8 @@ pub struct ChainSync {
 	private_tx_handler: Option<Arc<PrivateTxHandler>>,
 	/// Enable warp sync.
 	warp_sync: WarpSync,
+	/// Fast-warp handler,
+	fast_warp: FastWarp,
 }
 
 impl ChainSync {
@@ -676,6 +705,7 @@ impl ChainSync {
 			transactions_stats: TransactionsStats::default(),
 			private_tx_handler,
 			warp_sync: config.warp_sync,
+			fast_warp: FastWarp::new(),
 		};
 
 		sync.update_targets(chain);
@@ -970,7 +1000,7 @@ impl ChainSync {
 					self.maybe_start_snapshot_sync(io);
 				},
 				SyncState::FastWarp => {
-					let (account_from, storage_from) = self.peers.get(&peer_id).map(|p| p.fast_warp).unwrap_or_default();
+					let (account_from, storage_from) = self.fast_warp.get_request();
 					SyncRequester::request_fast_warp_data(self, io, peer_id, &account_from, &storage_from);
 					return;
 				},

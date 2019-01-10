@@ -22,6 +22,7 @@ hashdb = "0.3.0"
 heapsize = "0.4"
 keccak-hash = "0.1"
 keccak-hasher = { path = "../../util/keccak-hasher" }
+db-utils = { path = "../../util/db" }
 kvdb = "0.1"
 log = "0.4"
 macros = { path = "../../util/macros" }

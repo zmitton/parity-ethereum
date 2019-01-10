@@ -28,7 +28,7 @@ use kvdb::KeyValueDB;
 use self::ethcore_blockchain::{BlockChainDBHandler, BlockChainDB};
 use self::kvdb_rocksdb::{Database, DatabaseConfig};
 
-use cache::CacheConfig;
+use cache_utils::CacheConfig;
 
 mod blooms;
 mod migration;

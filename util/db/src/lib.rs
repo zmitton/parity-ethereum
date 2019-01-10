@@ -16,6 +16,14 @@
 
 //! Database-related operations.
 
+extern crate blooms_db;
+extern crate cache_utils;
+extern crate ethcore;
+extern crate ethcore_db;
+extern crate ethereum_types;
+extern crate kvdb;
+extern crate rlp;
+
 #[path="rocksdb/mod.rs"]
 mod impls;
 

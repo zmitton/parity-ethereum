@@ -71,6 +71,8 @@ extern crate node_filter;
 extern crate keccak_hash as hash;
 extern crate journaldb;
 extern crate registrar;
+extern crate cache_utils as cache;
+extern crate db_utils as db;
 
 #[macro_use]
 extern crate log as rlog;
@@ -87,7 +89,6 @@ extern crate tempdir;
 
 mod account;
 mod blockchain;
-mod cache;
 mod cli;
 mod configuration;
 mod export_hardcoded_sync;
@@ -108,7 +109,6 @@ mod snapshot;
 mod upgrade;
 mod user_defaults;
 mod whisper;
-mod db;
 
 use std::io::BufReader;
 use std::fs::File;

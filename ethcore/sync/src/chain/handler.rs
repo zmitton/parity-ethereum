@@ -597,10 +597,7 @@ impl SyncHandler {
 
 		println!("Got fast-warp data up to {}::{} ({} accounts)", last_account_hash, last_storage_key, num_accounts);
 
-		if let Some(ref mut peer) = sync.peers.get_mut(&peer_id) {
-			peer.fast_warp = (last_account_hash, last_storage_key);
-		}
-
+		sync.fast_warp.update(last_account_hash, last_storage_key);
 		Ok(())
 	}
 
@@ -629,7 +626,6 @@ impl SyncHandler {
 			snapshot_hash: if warp_protocol { Some(r.val_at(5)?) } else { None },
 			snapshot_number: if warp_protocol { Some(r.val_at(6)?) } else { None },
 			block_set: None,
-			fast_warp: (H256::zero(), H256::zero()),
 			private_tx_enabled: if private_tx_protocol { r.val_at(7).unwrap_or(false) } else { false },
 		};
 
