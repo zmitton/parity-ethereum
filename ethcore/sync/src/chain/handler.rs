@@ -575,29 +575,7 @@ impl SyncHandler {
 			return Ok(());
 		}
 
-		let mut last_account_hash: H256 = H256::zero();
-		let mut last_storage_key: H256 = H256::zero();
-		let mut num_accounts = 0;
-
-		for account_rlp in r.iter() {
-			num_accounts += 1;
-
-			let account_hash: H256 = account_rlp.val_at(0).expect("Invalid account_hash");
-			last_account_hash = account_hash;
-
-			let storage_rlp = account_rlp.at(2).expect("Invalid storage_rlp");
-			let storage_count = storage_rlp.item_count().expect("Invalid storage_count");
-
-			if storage_count == 0 { continue; }
-			let last_storage_rlp = storage_rlp.at(storage_count - 1).expect("Invalid last_storage_rlp");
-
-			let last_key: H256 = last_storage_rlp.val_at(0).expect("Invalid last_key");
-			last_storage_key = last_key;
-		}
-
-		println!("Got fast-warp data up to {}::{} ({} accounts)", last_account_hash, last_storage_key, num_accounts);
-
-		sync.fast_warp.update(last_account_hash, last_storage_key);
+		sync.fast_warp.process_chunk(r);
 		Ok(())
 	}
 

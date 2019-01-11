@@ -148,6 +148,7 @@ extern crate env_logger;
 #[cfg(test)]
 extern crate rlp_compress;
 
+pub mod account_db;
 pub mod account_provider;
 pub mod block;
 pub mod builtin;
@@ -169,7 +170,6 @@ pub mod trace;
 pub mod transaction_ext;
 pub mod verification;
 
-mod account_db;
 mod externalities;
 mod factory;
 mod tx_filter;

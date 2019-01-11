@@ -606,31 +606,192 @@ enum PeerState {
 }
 
 use std::path::PathBuf;
+use db_utils::open_db_default;
+// use ethcore_blockchain::{BlockChainDB};
+use rlp::Rlp;
+use ethcore::account_db::{AccountDBMut};
+use journaldb::{self, JournalDB, Algorithm};
+use types::basic_account::BasicAccount;
+use hashdb::HashDB;
+use hash::{KECCAK_EMPTY, KECCAK_NULL_RLP};
+use ethtrie::{TrieDBMut};
+use trie::{TrieMut};
 
 pub struct FastWarp {
-	current_account_from: H256,
-	current_storage_from: H256,
+	next_account_from: H256,
+	next_storage_from: H256,
+
+	// (last account hash ; last account storage root)
+	last_account: (H256, H256),
+	// Current state root
+	state_root: H256,
+	finished: bool,
+
+	db: Box<JournalDB>,
 }
 
 impl FastWarp {
-	pub fn new() -> FastWarp {
-		FastWarp {
-			current_account_from: H256::zero(),
-			current_storage_from: H256::zero(),
-		}
+	pub fn new() -> std::io::Result<FastWarp> {
+		let db = open_db_default(&FastWarp::db_path())?;
+		let kvdb = db.key_value().clone();
+		println!("Trying to create JournalDB...");
+		let db = journaldb::new(kvdb, Algorithm::OverlayRecent, ::ethcore_db::COL_STATE);
+
+		Ok(FastWarp {
+			next_account_from: H256::zero(),
+			next_storage_from: H256::zero(),
+
+			last_account: (H256::zero(), H256::zero()),
+			state_root: KECCAK_NULL_RLP,
+			finished: false,
+
+			db,
+		})
 	}
 
-	fn db_path () -> PathBuf {
+	fn finish(&mut self) {
+		self.finished = true;
+		println!("DONE Fast-Warping. State_root: {:?}", self.state_root);
+	}
+
+	fn db_path() -> PathBuf {
 		PathBuf::from("/tmp/fast-warp")
 	}
 
-	pub fn update(&mut self, account_from: H256, storage_from: H256) {
-		self.current_account_from = account_from;
-		self.current_storage_from = storage_from;
+	pub fn process_chunk(&mut self, r: &Rlp) {
+		// This should be [account_hash, storage_key, storage_root]
+		let num_accounts = r.item_count().unwrap();
+
+		if num_accounts == 0 {
+			self.finish();
+			return;
+		}
+
+		let mut last_item = (H256::zero(), H256::zero(), H256::zero());
+		let mut account_pairs = Vec::with_capacity(num_accounts);
+		account_pairs.resize(num_accounts, (H256::new(), Vec::new()));
+
+		let mut should_finish = false;
+
+		{
+			let db = self.db.as_hashdb_mut();
+
+			for (idx, (account_rlp, account_pair)) in r.into_iter().zip(account_pairs.iter_mut()).enumerate() {
+				let account_hash: H256 = account_rlp.val_at(0).expect("Invalid account_hash");
+
+				trace!(target: "sync", "Going through account {:?}", account_hash);
+
+				let mut acct_db = AccountDBMut::from_hash(db, account_hash);
+				let mut storage_root = if self.last_account.0 == account_hash {
+					self.last_account.1
+				}  else {
+					H256::zero()
+				};
+				let mut last_storage_key = H256::zero();
+
+				let storage_rlp = account_rlp.at(2).expect("Invalid storage_rlp");
+				let storage_count = storage_rlp.item_count().expect("Invalid storage_count");
+
+				{
+					let mut storage_trie = if storage_root.is_zero() {
+						TrieDBMut::new(&mut acct_db, &mut storage_root)
+					} else {
+						TrieDBMut::from_existing(&mut acct_db, &mut storage_root)
+							.expect("Couldn't open TrieDB from storage_root")
+					};
+
+					for pair_rlp in storage_rlp.iter() {
+						let k: Bytes  = pair_rlp.val_at(0).expect("Invalid storage_key RLP");
+						let v: Bytes = pair_rlp.val_at(1).expect("Invalid storage_value RLP");
+
+						last_storage_key = H256::from_slice(&k);
+						storage_trie.insert(&k, &v).expect("Failed to insert KV pair in storage Trie");
+					}
+				}
+
+				if storage_count == 0 {
+					trace!(target: "sync", "No storage!");
+					// If there is no storage and only one element, which is the same as previously,
+					// it is OVER
+					if num_accounts == 1 && account_hash == self.last_account.0 {
+						should_finish = true;
+						break;
+					}
+				}
+
+				let account_data_rlp = account_rlp.at(1).expect("Invalid account_data RLP");
+				let account_nonce: U256 = account_data_rlp.val_at(0).expect("Invalid account nonce RLP");
+				let account_balance: U256 = account_data_rlp.val_at(1).expect("Invalid account nonce RLP");
+				let account_storage_root: H256 = account_data_rlp.val_at(2).expect("Invalid account nonce RLP");
+
+				let code_hash = match account_data_rlp.item_count().expect("Invalid account_data RLP") {
+					3 => KECCAK_EMPTY,
+					4 => {
+						let code: Bytes = account_data_rlp.val_at(3).expect("Invalid code");
+						let code_hash = acct_db.insert(&code);
+
+						code_hash
+					},
+					i => panic!("Invalid account_data_rlp items: {}", i),
+				};
+
+				let acc = BasicAccount {
+					nonce: account_nonce,
+					balance: account_balance,
+					storage_root: storage_root,
+					code_hash: code_hash,
+				};
+
+				let thin_rlp = ::rlp::encode(&acc);
+				*account_pair = (account_hash, thin_rlp);
+
+				// Ie. not the last one, storage_root should be known
+				let is_last_item = idx == num_accounts - 1;
+				if !is_last_item {
+					if account_storage_root != storage_root {
+						trace!(target: "sync",
+							"Invalid storage_root! expected {:?}, got {:?}",
+							account_storage_root, storage_count
+						);
+					}
+				} else {
+					last_item = (account_hash, last_storage_key, storage_root);
+				}
+			}
+		}
+
+		if should_finish {
+			self.finish();
+			return;
+		}
+
+		println!("Got fast-warp data up to {:?}::{:?} ({} accounts)", last_item.0, last_item.1, num_accounts);
+
+		{
+			let mut account_trie = if self.state_root != KECCAK_NULL_RLP {
+				TrieDBMut::from_existing(self.db.as_hashdb_mut(), &mut self.state_root).unwrap()
+			} else {
+				TrieDBMut::new(self.db.as_hashdb_mut(), &mut self.state_root)
+			};
+
+			for (hash, thin_rlp) in account_pairs {
+				account_trie.insert(&hash, &thin_rlp).unwrap();
+			}
+		}
+
+		println!("Current state root: {:?}", self.state_root);
+		self.update(last_item.0, last_item.1, last_item.2);
+	}
+
+	pub fn update(&mut self, account_from: H256, storage_from: H256, storage_root: H256) {
+		self.next_account_from = account_from;
+		self.next_storage_from = H256::from(U256::from(storage_from) + U256::one());
+
+		self.last_account = (account_from, storage_root);
 	}
 
 	pub fn get_request(&self) -> (H256, H256) {
-		(self.current_account_from, self.current_storage_from)
+		(self.next_account_from, self.next_storage_from)
 	}
 }
 
@@ -705,7 +866,7 @@ impl ChainSync {
 			transactions_stats: TransactionsStats::default(),
 			private_tx_handler,
 			warp_sync: config.warp_sync,
-			fast_warp: FastWarp::new(),
+			fast_warp: FastWarp::new().expect("Couldn't create FastWarp"),
 		};
 
 		sync.update_targets(chain);
@@ -1000,8 +1161,10 @@ impl ChainSync {
 					self.maybe_start_snapshot_sync(io);
 				},
 				SyncState::FastWarp => {
-					let (account_from, storage_from) = self.fast_warp.get_request();
-					SyncRequester::request_fast_warp_data(self, io, peer_id, &account_from, &storage_from);
+					if !self.fast_warp.finished {
+						let (account_from, storage_from) = self.fast_warp.get_request();
+						SyncRequester::request_fast_warp_data(self, io, peer_id, &account_from, &storage_from);
+					}
 					return;
 				},
 				SyncState::Idle | SyncState::Blocks | SyncState::NewBlocks => {

@@ -99,6 +99,11 @@ pub fn open_db(client_path: &str, cache_config: &CacheConfig, compaction: &Datab
 	open_database(client_path, &db_config)
 }
 
+pub fn open_db_default(path: &Path) -> io::Result<Arc<BlockChainDB>> {
+	let client_db_config = helpers::client_db_config(path, &ClientConfig::default());
+	open_database(&path.to_string_lossy(), &client_db_config)
+}
+
 pub fn open_database(client_path: &str, config: &DatabaseConfig) -> io::Result<Arc<BlockChainDB>> {
 	let path = Path::new(client_path);
 

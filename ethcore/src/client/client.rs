@@ -1918,7 +1918,7 @@ impl BlockChainClient for Client {
 
 		for item in account_iter {
 			// [ account_hash ; account_data ; account_storage ]
-			// 		where account_data = [ nonce ; balance ; (opt) code ]
+			// 		where account_data = [ nonce ; balance ; storage_root ; (opt) code ]
 			// 		where account_storage = [ [ k_0 ; v_0 ] ; ... ]
 			let mut account_rlp = RlpStream::new_list(3);
 
@@ -1941,7 +1941,8 @@ impl BlockChainClient for Client {
 
 			account_rlp
 				.append(&account.nonce)
-				.append(&account.balance);
+				.append(&account.balance)
+				.append(&account.storage_root);
 			total_bytes += 64;
 
 			match account_db.get(&account.code_hash) {

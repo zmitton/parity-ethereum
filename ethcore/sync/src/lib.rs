@@ -22,14 +22,21 @@
 //!
 
 extern crate common_types as types;
+extern crate db_utils;
 extern crate ethcore;
+extern crate ethcore_blockchain;
+extern crate ethcore_db;
 extern crate ethcore_io as io;
 extern crate ethcore_network as network;
 extern crate ethcore_network_devp2p as devp2p;
 extern crate ethereum_types;
 extern crate ethstore;
 extern crate fastmap;
+extern crate hashdb;
+extern crate journaldb;
 extern crate keccak_hash as hash;
+extern crate patricia_trie as trie;
+extern crate patricia_trie_ethereum as ethtrie;
 extern crate parity_bytes as bytes;
 extern crate parking_lot;
 extern crate rand;

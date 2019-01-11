@@ -9,8 +9,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 common-types = { path = "../types" }
+db-utils = { path = "../../util/db" }
 env_logger = "0.5"
 ethcore = { path = ".." }
+ethcore-blockchain = { path = "../blockchain" }
+ethcore-db = { path = "../db" }
 ethcore-io = { path = "../../util/io" }
 ethcore-light = { path = "../light" }
 ethcore-network = { path = "../../util/network" }
@@ -20,12 +23,14 @@ ethstore = { path = "../../accounts/ethstore" }
 fastmap = { path = "../../util/fastmap" }
 hashdb = "0.3.0"
 heapsize = "0.4"
+journaldb = { path = "../../util/journaldb" }
 keccak-hash = "0.1"
 keccak-hasher = { path = "../../util/keccak-hasher" }
-db-utils = { path = "../../util/db" }
 kvdb = "0.1"
 log = "0.4"
 macros = { path = "../../util/macros" }
+patricia-trie = "0.3.0"
+patricia-trie-ethereum = { path = "../../util/patricia-trie-ethereum" }
 parity-bytes = "0.1"
 parking_lot = "0.7"
 rand = "0.4"
