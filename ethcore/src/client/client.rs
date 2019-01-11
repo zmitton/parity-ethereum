@@ -1914,6 +1914,8 @@ impl BlockChainClient for Client {
 		let mut total_bytes = 0;
 		let mut total_accounts = 0;
 
+		let mut is_first = true;
+
 		rlps.begin_unbounded_list();
 
 		for item in account_iter {
@@ -1931,7 +1933,10 @@ impl BlockChainClient for Client {
 			let storage_db = TrieDB::new(&account_db, &account.storage_root)?;
 			let mut storage_db_iter = storage_db.iter()?;
 
-			storage_db_iter.seek(&storage_from)?;
+			if is_first {
+				storage_db_iter.seek(&storage_from)?;
+				is_first = false;
+			}
 
 			account_rlp.append(&account_hash);
 			total_bytes += 32;

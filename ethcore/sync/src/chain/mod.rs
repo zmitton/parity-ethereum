@@ -679,7 +679,7 @@ impl FastWarp {
 			for (idx, (account_rlp, account_pair)) in r.into_iter().zip(account_pairs.iter_mut()).enumerate() {
 				let account_hash: H256 = account_rlp.val_at(0).expect("Invalid account_hash");
 
-				trace!(target: "sync", "Going through account {:?}", account_hash);
+				// trace!(target: "sync", "Going through account {:?}", account_hash);
 
 				let mut acct_db = AccountDBMut::from_hash(db, account_hash);
 				let mut storage_root = if self.last_account.0 == account_hash {
@@ -710,7 +710,7 @@ impl FastWarp {
 				}
 
 				if storage_count == 0 {
-					trace!(target: "sync", "No storage!");
+					// trace!(target: "sync", "No storage!");
 					// If there is no storage and only one element, which is the same as previously,
 					// it is OVER
 					if num_accounts == 1 && account_hash == self.last_account.0 {
@@ -751,7 +751,7 @@ impl FastWarp {
 					if account_storage_root != storage_root {
 						trace!(target: "sync",
 							"Invalid storage_root! expected {:?}, got {:?}",
-							account_storage_root, storage_count
+							account_storage_root, storage_root
 						);
 					}
 				} else {
@@ -765,7 +765,13 @@ impl FastWarp {
 			return;
 		}
 
-		println!("Got fast-warp data up to {:?}::{:?} ({} accounts)", last_item.0, last_item.1, num_accounts);
+		let progress = ((last_item.0[0] as u32 * 256 + last_item.0[1] as u32) * 100)  as f64 / (256 * 256) as f64;
+
+		println!(
+			"Got fast-warp data up to {:?}::{:?} ({} accounts) progress={}%",
+			last_item.0, last_item.1, num_accounts,
+			progress,
+		);
 
 		{
 			let mut account_trie = if self.state_root != KECCAK_NULL_RLP {
