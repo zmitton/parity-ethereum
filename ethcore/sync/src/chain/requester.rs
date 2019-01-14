@@ -32,6 +32,7 @@ use super::{
 	GET_BLOCK_BODIES_PACKET,
 	GET_BLOCK_HEADERS_PACKET,
 	GET_RECEIPTS_PACKET,
+	GET_NODE_DATA_PACKET,
 	GET_SNAPSHOT_DATA_PACKET,
 	GET_SNAPSHOT_MANIFEST_PACKET,
 	GET_FAST_WARP_DATA_PACKET,
@@ -123,6 +124,15 @@ impl SyncRequester {
 		let peer = sync.peers.get_mut(&peer_id).expect("peer_id may originate either from on_packet, where it is already validated or from enumerating self.peers. qed");
 		peer.asking_blocks = hashes;
 		peer.block_set = Some(set);
+	}
+
+	pub fn request_node_data(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, hashes: Vec<H256>) {
+		let mut rlp = RlpStream::new_list(hashes.len());
+		trace!(target: "sync", "{} <- GetNodeData: {} entries starting from {:?}", peer_id, hashes.len(), hashes.first());
+		for h in &hashes {
+			rlp.append(&h.clone());
+		}
+		SyncRequester::send_request(sync, io, peer_id, PeerAsking::NodeData, GET_NODE_DATA_PACKET, rlp.out());
 	}
 
 	/// Request snapshot chunk from a peer.

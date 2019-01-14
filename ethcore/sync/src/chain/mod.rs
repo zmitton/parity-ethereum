@@ -191,6 +191,7 @@ const FORK_HEADER_TIMEOUT: Duration = Duration::from_secs(3);
 const SNAPSHOT_MANIFEST_TIMEOUT: Duration = Duration::from_secs(5);
 const SNAPSHOT_DATA_TIMEOUT: Duration = Duration::from_secs(120);
 const FAST_WARP_DATA_TIMEOUT: Duration = Duration::from_secs(30);
+const NODE_DATA_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Defines how much time we have to complete priority transaction or block propagation.
 /// after the deadline is reached the task is considered finished
@@ -294,7 +295,7 @@ pub enum PeerAsking {
 	SnapshotManifest,
 	SnapshotData,
 	FastWarpData,
-	FastWarpTrie,
+	NodeData,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -1190,10 +1191,13 @@ impl ChainSync {
 						SyncRequester::request_fast_warp_data(self, io, peer_id, &account_from, &storage_from);
 					} else {
 						// Now patch the fast-warp with missing Trie elmts
+						info!(target: "fast-warp", "Now filling the gaps!");
 						self.state = SyncState::FastWarpTrie;
 					}
 				},
 				SyncState::FastWarpTrie => {
+					let state_root = self.fast_warp.sync_target;
+					SyncRequester::request_node_data(self, io, peer_id, vec![state_root].to_vec());
 
 				},
 				SyncState::Idle | SyncState::Blocks | SyncState::NewBlocks => {
@@ -1403,7 +1407,7 @@ impl ChainSync {
 				PeerAsking::SnapshotManifest => elapsed > SNAPSHOT_MANIFEST_TIMEOUT,
 				PeerAsking::SnapshotData => elapsed > SNAPSHOT_DATA_TIMEOUT,
 				PeerAsking::FastWarpData => elapsed > FAST_WARP_DATA_TIMEOUT,
-				PeerAsking::FastWarpTrie => elapsed > FAST_WARP_DATA_TIMEOUT,
+				PeerAsking::NodeData => elapsed > NODE_DATA_TIMEOUT,
 			};
 			if timeout {
 				debug!(target:"sync", "Timeout {}", peer_id);
