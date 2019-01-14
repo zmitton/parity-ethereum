@@ -1893,19 +1893,14 @@ impl BlockChainClient for Client {
 		self.chain.read().block_receipts(hash)
 	}
 
-	fn fast_warp_data(&self, account_from: &H256, storage_from: &H256) -> EthcoreResult<Bytes> {
+	fn fast_warp_data(&self, state_root: &H256, account_from: &H256, storage_from: &H256) -> EthcoreResult<Bytes> {
 		// Maximum 4Mb packets
 		const MAX_SIZE: usize = 1024 * 1024 * 4;
 
 		let db = self.state_db.read().journal_db().boxed_clone();
 		let state_db = db.as_hashdb();
-		let chain = self.chain.read();
 
-		let block_hash = self.block_hash(BlockId::Latest).expect("[fast_warp_data] Could not get latest block_hash");
-		let start_header = chain.block_header_data(&block_hash).expect("[fast_warp_data] Invalid block hash");
-		let state_root = start_header.state_root();
-
-		let account_trie = TrieDB::new(state_db, &state_root)?;
+		let account_trie = TrieDB::new(state_db, state_root)?;
 		let mut account_iter = account_trie.iter()?;
 
 		account_iter.seek(&account_from)?;

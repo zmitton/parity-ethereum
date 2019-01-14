@@ -627,6 +627,11 @@ pub struct FastWarp {
 	state_root: H256,
 	finished: bool,
 
+	// Target for the Fast-Warp sync
+	fw_target: H256,
+	// Target for post-FW sync, via. GetNodeData
+	sync_target: H256,
+
 	db: Box<JournalDB>,
 }
 
@@ -645,13 +650,23 @@ impl FastWarp {
 			state_root: KECCAK_NULL_RLP,
 			finished: false,
 
+			// State root hash of block 0x1b02d (on Kovan)
+			fw_target: H256::from("e6f4083fdcf5140f8ff4ff4bba5f5e1c57ba9bd7a7bbb77fcbe0c00ebfdefe5f"),
+			// State root hash of block 0x1b02e (on Kovan)
+			sync_target: H256::from("82d1edd175ce643c04d1cc829bee33ccd46d497ddb1aac79c921ee3576a2f874"),
+
 			db,
 		})
 	}
 
 	fn finish(&mut self) {
 		self.finished = true;
-		println!("DONE Fast-Warping. State_root: {:?}", self.state_root);
+		let success = self.state_root == self.fw_target;
+		if success {
+			info!("Successful fast-warp!");
+		} else {
+			warn!("Unsuccessful fast-warp: target={:?} vs. current={:?}", self.fw_target, self.state_root);
+		}
 	}
 
 	fn db_path() -> PathBuf {

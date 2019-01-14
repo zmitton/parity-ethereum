@@ -816,7 +816,7 @@ impl BlockChainClient for TestBlockChainClient {
 		None
 	}
 
-	fn fast_warp_data(&self, _account_from: &H256, _storage_from: &H256) -> EthcoreResult<Bytes> {
+	fn fast_warp_data(&self, _state_root: &H256, _account_from: &H256, _storage_from: &H256) -> EthcoreResult<Bytes> {
 		Ok(Bytes::new())
 	}
 
