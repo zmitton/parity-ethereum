@@ -218,6 +218,8 @@ pub enum SyncState {
 	NewBlocks,
 	/// Downloading fast-warp data
 	FastWarp,
+	/// Downloading fast-warp trie
+	FastWarpTrie,
 }
 
 /// Syncing status and statistics
@@ -292,6 +294,7 @@ pub enum PeerAsking {
 	SnapshotManifest,
 	SnapshotData,
 	FastWarpData,
+	FastWarpTrie,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -1185,8 +1188,13 @@ impl ChainSync {
 					if !self.fast_warp.finished {
 						let (account_from, storage_from) = self.fast_warp.get_request();
 						SyncRequester::request_fast_warp_data(self, io, peer_id, &account_from, &storage_from);
+					} else {
+						// Now patch the fast-warp with missing Trie elmts
+						self.state = SyncState::FastWarpTrie;
 					}
-					return;
+				},
+				SyncState::FastWarpTrie => {
+
 				},
 				SyncState::Idle | SyncState::Blocks | SyncState::NewBlocks => {
 					if io.chain().queue_info().is_full() {
@@ -1395,6 +1403,7 @@ impl ChainSync {
 				PeerAsking::SnapshotManifest => elapsed > SNAPSHOT_MANIFEST_TIMEOUT,
 				PeerAsking::SnapshotData => elapsed > SNAPSHOT_DATA_TIMEOUT,
 				PeerAsking::FastWarpData => elapsed > FAST_WARP_DATA_TIMEOUT,
+				PeerAsking::FastWarpTrie => elapsed > FAST_WARP_DATA_TIMEOUT,
 			};
 			if timeout {
 				debug!(target:"sync", "Timeout {}", peer_id);
