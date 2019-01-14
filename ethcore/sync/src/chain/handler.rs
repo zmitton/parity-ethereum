@@ -59,6 +59,7 @@ use super::{
 	SNAPSHOT_MANIFEST_PACKET,
 	FAST_WARP_DATA_PACKET,
 	STATUS_PACKET,
+	NODE_DATA_PACKET,
 };
 
 /// The Chain Sync Handler: handles responses from peers
@@ -75,6 +76,7 @@ impl SyncHandler {
 			RECEIPTS_PACKET => SyncHandler::on_peer_block_receipts(sync, io, peer, &rlp),
 			NEW_BLOCK_PACKET => SyncHandler::on_peer_new_block(sync, io, peer, &rlp),
 			NEW_BLOCK_HASHES_PACKET => SyncHandler::on_peer_new_hashes(sync, io, peer, &rlp),
+			NODE_DATA_PACKET => SyncHandler::on_node_data(sync, io, peer, &rlp),
 			SNAPSHOT_MANIFEST_PACKET => SyncHandler::on_snapshot_manifest(sync, io, peer, &rlp),
 			SNAPSHOT_DATA_PACKET => SyncHandler::on_snapshot_data(sync, io, peer, &rlp),
 			FAST_WARP_DATA_PACKET => SyncHandler::on_fast_warp_data(sync, io, peer, &rlp),
@@ -471,6 +473,20 @@ impl SyncHandler {
 			sync.collect_blocks(io, block_set);
 			Ok(())
 		}
+	}
+
+	/// Called when NodeData is received from a peer
+	fn on_node_data(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
+		use ethtrie::RlpCodec;
+		use trie::NodeCodec;
+
+		let item_count = r.item_count().unwrap_or(0);
+		trace!(target: "sync", "{} -> NodeData ({} entries)", peer_id, item_count);
+		for i in 0..item_count {
+			let node = RlpCodec::decode(r.at(i)?.as_raw());
+			trace!(target: "sync", "Item {} : {:?}", i, node);
+		}
+		Ok(())
 	}
 
 	/// Called when snapshot manifest is downloaded from a peer.
