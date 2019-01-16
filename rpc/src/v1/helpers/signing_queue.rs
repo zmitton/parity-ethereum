@@ -25,6 +25,8 @@ use jsonrpc_core::Error;
 /// Result that can be returned from JSON RPC.
 pub type ConfirmationResult = Result<ConfirmationResponse, Error>;
 
+type QueueEvents = Vec<Box<Fn(QueueEvent) -> () + Send + Sync>>;
+
 /// Type of default account
 pub enum DefaultAccount {
 	/// Default account is known
@@ -105,7 +107,7 @@ pub type ConfirmationReceiver =  oneshot::Receiver<ConfirmationResult>;
 pub struct ConfirmationsQueue {
 	id: Mutex<U256>,
 	queue: RwLock<BTreeMap<U256, ConfirmationSender>>,
-	on_event: RwLock<Vec<Box<Fn(QueueEvent) -> () + Send + Sync>>>,
+	on_event: RwLock<QueueEvents>,
 }
 
 impl ConfirmationsQueue {
@@ -130,7 +132,7 @@ impl ConfirmationsQueue {
 		));
 
 		// notify confirmation receiver about resolution
-		let result = result.ok_or(errors::request_rejected());
+		let result = result.ok_or_else(errors::request_rejected);
 		sender.sender.send(result);
 
 		Some(sender.request)
@@ -159,8 +161,7 @@ impl SigningQueue for ConfirmationsQueue {
 		// Increment id
 		let id = {
 			let mut last_id = self.id.lock();
-			*last_id = *last_id + U256::from(1);
-			*last_id
+			*last_id + U256::from(1)
 		};
 		// Add request to queue
 		let res = {

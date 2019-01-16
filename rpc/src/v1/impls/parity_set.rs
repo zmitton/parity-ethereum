@@ -57,7 +57,7 @@ impl<C, M, U, F> ParitySetClient<C, M, U, F>
 			miner: miner.clone(),
 			updater: updater.clone(),
 			net: net.clone(),
-			fetch: fetch,
+			fetch,
 		}
 	}
 }
@@ -85,14 +85,14 @@ impl<C, M, U, F> ParitySet for ParitySetClient<C, M, U, F> where
 	}
 
 	fn set_gas_floor_target(&self, target: U256) -> Result<bool> {
-		let mut range = self.miner.authoring_params().gas_range_target.clone();
+		let mut range = self.miner.authoring_params().gas_range_target;
 		range.0 = target.into();
 		self.miner.set_gas_range_target(range);
 		Ok(true)
 	}
 
 	fn set_gas_ceil_target(&self, target: U256) -> Result<bool> {
-		let mut range = self.miner.authoring_params().gas_range_target.clone();
+		let mut range = self.miner.authoring_params().gas_range_target;
 		range.1 = target.into();
 		self.miner.set_gas_range_target(range);
 		Ok(true)

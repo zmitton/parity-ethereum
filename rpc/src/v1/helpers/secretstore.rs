@@ -146,7 +146,7 @@ fn encrypt_secret(secret: &Public, joint_public: &Public) -> Result<(Public, Pub
 		.map_err(errors::encryption)?;
 
 	// M + k * y
-	let mut encrypted_point = joint_public.clone();
+	let mut encrypted_point = *joint_public;
 	math::public_mul_secret(&mut encrypted_point, key_pair.secret())
 		.map_err(errors::encryption)?;
 	math::public_add(&mut encrypted_point, secret)

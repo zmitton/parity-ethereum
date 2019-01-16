@@ -42,7 +42,7 @@ impl SignerService {
 			queue: Arc::new(ConfirmationsQueue::default()),
 			web_proxy_tokens: Mutex::new(TransientHashMap::new(TOKEN_LIFETIME_SECS)),
 			generate_new_token: Box::new(new_token),
-			is_enabled: is_enabled,
+			is_enabled
 		}
 	}
 

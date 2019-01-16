@@ -130,7 +130,7 @@ impl ParityAccounts for ParityAccountsClient {
 	fn set_account_name(&self, addr: RpcH160, name: String) -> Result<bool> {
 		let addr: Address = addr.into();
 
-		self.accounts.set_account_name(addr.clone(), name.clone())
+		self.accounts.set_account_name(addr, name.clone())
 			.unwrap_or_else(|_| self.accounts.set_address_name(addr, name));
 		Ok(true)
 	}
@@ -138,7 +138,7 @@ impl ParityAccounts for ParityAccountsClient {
 	fn set_account_meta(&self, addr: RpcH160, meta: String) -> Result<bool> {
 		let addr: Address = addr.into();
 
-		self.accounts.set_account_meta(addr.clone(), meta.clone())
+		self.accounts.set_account_meta(addr, meta.clone())
 			.unwrap_or_else(|_| self.accounts.set_address_meta(addr, meta));
 		Ok(true)
 	}

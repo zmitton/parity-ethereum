@@ -182,7 +182,7 @@ impl<D: Dispatcher + 'static> Signer for SignerClient<D> {
 			WithToken::No(_) => Err(errors::internal("Unexpected response without token.", "")),
 			WithToken::Yes(response, token) => Ok(ConfirmationResponseWithToken {
 				result: response,
-				token: token,
+				token,
 			}),
 		}))
 	}
@@ -244,7 +244,7 @@ impl<D: Dispatcher + 'static> Signer for SignerClient<D> {
 
 	fn generate_token(&self) -> Result<String> {
 		self.signer.generate_token()
-			.map_err(|e| errors::token(e))
+			.map_err(errors::token)
 	}
 
 	fn generate_web_proxy_token(&self, domain: String) -> Result<String> {

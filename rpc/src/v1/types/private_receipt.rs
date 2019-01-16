@@ -35,7 +35,7 @@ impl From<EthPrivateReceipt> for PrivateTransactionReceipt {
 		PrivateTransactionReceipt {
 			transaction_hash: r.hash.into(),
 			contract_address: r.contract_address.map(Into::into),
-			status_code: r.status_code.into(),
+			status_code: r.status_code,
 		}
 	}
 }

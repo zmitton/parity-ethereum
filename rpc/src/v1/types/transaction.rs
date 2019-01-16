@@ -178,7 +178,7 @@ impl Transaction {
 		Transaction {
 			hash: t.hash().into(),
 			nonce: t.nonce.into(),
-			block_hash: Some(t.block_hash.clone().into()),
+			block_hash: Some(t.block_hash.into()),
 			block_number: Some(t.block_number.into()),
 			transaction_index: Some(t.transaction_index.into()),
 			from: t.sender().into(),

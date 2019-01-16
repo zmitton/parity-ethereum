@@ -22,6 +22,7 @@ use v1::traits::Web3;
 use v1::types::{H256, Bytes};
 
 /// Web3 rpc implementation.
+#[derive(Default)]
 pub struct Web3Client;
 
 impl Web3Client {

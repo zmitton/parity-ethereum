@@ -16,11 +16,10 @@
 
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
-use tempdir::TempDir;
-
-use parity_runtime::{Runtime, TaskExecutor};
 
 use authcodes::AuthCodes;
+use parity_runtime::{Runtime, TaskExecutor};
+use tempdir::TempDir;
 
 /// Server with event loop
 pub struct Server<T> {
@@ -39,7 +38,7 @@ impl<T> Server<T> {
 
 		Server {
 			server: f(remote),
-			event_loop: event_loop,
+			event_loop,
 		}
 	}
 }

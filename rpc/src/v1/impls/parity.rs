@@ -194,7 +194,7 @@ impl<C, M, U, S> Parity for ParityClient<C, M, U> where
 			active: sync_status.num_active_peers,
 			connected: sync_status.num_peers,
 			max: sync_status.current_max_peers(num_peers_range.start, num_peers_range.end - 1),
-			peers: peers
+			peers
 		})
 	}
 
@@ -212,7 +212,7 @@ impl<C, M, U, S> Parity for ParityClient<C, M, U> where
 				.additional_params()
 				.get("registrar")
 				.and_then(|s| Address::from_str(s).ok())
-				.map(|s| H160::from(s))
+				.map(From::from)
 		)
 	}
 
@@ -381,7 +381,7 @@ impl<C, M, U, S> Parity for ParityClient<C, M, U> where
 			.and_then(|first| chain_info.first_block_number.map(|last| (first, U256::from(last))));
 
 		Ok(ChainStatus {
-			block_gap: gap.map(|(x, y)| (x.into(), y.into())),
+			block_gap: gap,
 		})
 	}
 
@@ -412,7 +412,7 @@ impl<C, M, U, S> Parity for ParityClient<C, M, U> where
 				BlockNumber::Pending => unreachable!(), // Already covered
 			};
 
-			let header = try_bf!(self.client.block_header(id.clone()).ok_or_else(errors::unknown_block));
+			let header = try_bf!(self.client.block_header(id).ok_or_else(errors::unknown_block));
 			let info = self.client.block_extra_info(id).expect(EXTRA_INFO_PROOF);
 
 			(header, Some(info))
@@ -509,7 +509,7 @@ impl<C, M, U, S> Parity for ParityClient<C, M, U> where
 	fn logs_no_tx_hash(&self, filter: Filter) -> BoxFuture<Vec<Log>> {
 		use v1::impls::eth::base_logs;
 		// only specific impl for lightclient
-		base_logs(&*self.client, &*self.miner, filter.into())
+		base_logs(&*self.client, &*self.miner, filter)
 	}
 
 	fn verify_signature(&self, is_prefixed: bool, message: Bytes, r: H256, s: H256, v: U64) -> Result<RecoveredAccount> {

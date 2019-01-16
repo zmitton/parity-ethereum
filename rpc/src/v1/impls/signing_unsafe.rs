@@ -47,15 +47,13 @@ impl<D: Dispatcher + 'static> SigningUnsafeClient<D> {
 	pub fn new(accounts: &Arc<AccountProvider>, dispatcher: D) -> Self {
 		SigningUnsafeClient {
 			accounts: accounts.clone(),
-			dispatcher: dispatcher,
+			dispatcher,
 		}
 	}
 
 	fn handle(&self, payload: RpcConfirmationPayload, account: DefaultAccount) -> BoxFuture<RpcConfirmationResponse> {
 		let accounts = self.accounts.clone();
-		let default = match account {
-			DefaultAccount::Provided(acc) => acc,
-		};
+		let DefaultAccount::Provided(default) = account;
 
 		let dis = self.dispatcher.clone();
 		Box::new(dispatch::from_rpc(payload, default, &dis)

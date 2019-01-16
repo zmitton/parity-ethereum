@@ -151,7 +151,7 @@ impl<C> ChainNotificationHandler<C> {
 				.map(|&(hash, ref ex)| {
 					let mut filter = filter.clone();
 					filter.from_block = BlockId::Hash(hash);
-					filter.to_block = filter.from_block.clone();
+					filter.to_block = filter.from_block;
 					logs(filter, ex).into_future()
 				})
 				.collect::<Vec<_>>()
@@ -220,13 +220,13 @@ impl<C: LightClient> LightChainNotify for ChainNotificationHandler<C> {
 impl<C: BlockChainClient> ChainNotify for ChainNotificationHandler<C> {
 	fn new_blocks(&self, new_blocks: NewBlocks) {
 		if self.heads_subscribers.read().is_empty() && self.logs_subscribers.read().is_empty() { return }
-		const EXTRA_INFO_PROOF: &'static str = "Object exists in in blockchain (fetched earlier), extra_info is always available if object exists; qed";
+		const EXTRA_INFO_PROOF: &str = "Object exists in in blockchain (fetched earlier), extra_info is always available if object exists; qed";
 		let headers = new_blocks.route.route()
 			.iter()
 			.filter_map(|&(hash, ref typ)| {
 				match typ {
-					&ChainRouteType::Retracted => None,
-					&ChainRouteType::Enacted => self.client.block_header(BlockId::Hash(hash))
+					ChainRouteType::Retracted => None,
+					ChainRouteType::Enacted => self.client.block_header(BlockId::Hash(hash))
 				}
 			})
 			.map(|header| {
@@ -241,9 +241,9 @@ impl<C: BlockChainClient> ChainNotify for ChainNotificationHandler<C> {
 		// We notify logs enacting and retracting as the order in route.
 		self.notify_logs(new_blocks.route.route(), |filter, ex| {
 			match ex {
-				&ChainRouteType::Enacted =>
+				ChainRouteType::Enacted =>
 					Ok(self.client.logs(filter).unwrap_or_default().into_iter().map(Into::into).collect()),
-				&ChainRouteType::Retracted =>
+				ChainRouteType::Retracted =>
 					Ok(self.client.logs(filter).unwrap_or_default().into_iter().map(Into::into).map(|mut log: Log| {
 						log.log_type = "removed".into();
 						log.removed = true;

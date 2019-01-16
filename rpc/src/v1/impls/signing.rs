@@ -73,7 +73,7 @@ fn schedule(executor: Executor,
 	future: RpcConfirmationReceiver) {
 	{
 		let mut confirmations = confirmations.lock();
-		confirmations.insert(id.clone(), None);
+		confirmations.insert(id, None);
 	}
 
 	let future = future.then(move |result| {
@@ -110,9 +110,7 @@ impl<D: Dispatcher + 'static> SigningQueueClient<D> {
 
 	fn dispatch(&self, payload: RpcConfirmationPayload, default_account: DefaultAccount, origin: Origin) -> BoxFuture<DispatchResult> {
 		let accounts = self.accounts.clone();
-		let default_account = match default_account {
-			DefaultAccount::Provided(acc) => acc,
-		};
+		let DefaultAccount::Provided(default_account) = default_account;
 
 		let dispatcher = self.dispatcher.clone();
 		let signer = self.signer.clone();

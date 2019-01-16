@@ -149,15 +149,16 @@ impl<T: LightChainClient + 'static> EthClient<T> {
 					timestamp: header.timestamp().into(),
 					difficulty: header.difficulty().clone().into(),
 					total_difficulty: score.map(Into::into),
-					seal_fields: header.seal().into_iter().cloned().map(Into::into).collect(),
+					seal_fields: header.seal().iter().cloned().map(Into::into).collect(),
 					uncles: block.uncle_hashes().into_iter().map(Into::into).collect(),
-					transactions: match include_txs {
-						true => BlockTransactions::Full(block.view().localized_transactions().into_iter().map(Transaction::from_localized).collect()),
-						_ => BlockTransactions::Hashes(block.transaction_hashes().into_iter().map(Into::into).collect()),
+					transactions: if include_txs {
+						BlockTransactions::Full(block.view().localized_transactions().into_iter().map(Transaction::from_localized).collect())
+					} else {
+						BlockTransactions::Hashes(block.transaction_hashes().into_iter().map(Into::into).collect())
 					},
 					extra_data: Bytes::new(header.extra_data().clone()),
 				},
-				extra_info: extra_info
+				extra_info
 			}
 		};
 
@@ -573,10 +574,10 @@ fn extract_uncle_at_index<T: LightChainClient>(block: encoded::Block, index: Ind
 				total_difficulty: None,
 				receipts_root: uncle.receipts_root().clone().into(),
 				extra_data: uncle.extra_data().clone().into(),
-				seal_fields: uncle.seal().into_iter().cloned().map(Into::into).collect(),
+				seal_fields: uncle.seal().iter().cloned().map(Into::into).collect(),
 				uncles: vec![],
 				transactions: BlockTransactions::Hashes(vec![]),
 			},
-			extra_info: extra_info,
+			extra_info,
 		})
 }

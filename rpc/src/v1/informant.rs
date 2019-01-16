@@ -199,7 +199,7 @@ impl<T: ActivityNotifier> Middleware<T> {
 	}
 
 	fn as_micro(dur: time::Duration) -> u32 {
-		(dur.as_secs() * 1_000_000) as u32 + dur.subsec_nanos() / 1_000
+		(dur.as_secs() * 1_000_000) as u32 + dur.subsec_micros()
 	}
 }
 

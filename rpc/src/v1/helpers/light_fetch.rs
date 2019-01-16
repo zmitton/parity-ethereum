@@ -53,7 +53,6 @@ use v1::helpers::{CallRequest as CallRequestHelper, errors, dispatch};
 use v1::types::{BlockNumber, CallRequest, Log, Transaction};
 
 const NO_INVALID_BACK_REFS_PROOF: &str = "Fails only on invalid back-references; back-references here known to be valid; qed";
-
 const WRONG_RESPONSE_AMOUNT_TYPE_PROOF: &str = "responses correspond directly with requests in amount and type; qed";
 
 pub fn light_all_transactions(dispatch: &Arc<dispatch::LightDispatcher>) -> impl Iterator<Item=PendingTransaction> {
@@ -101,7 +100,7 @@ pub fn extract_transaction_at_index(block: encoded::Block, index: usize) -> Opti
 				cached_sender,
 			}
 		})
-		.map(|tx| Transaction::from_localized(tx))
+		.map(Transaction::from_localized)
 }
 
 // extract the header indicated by the given `HeaderRef` from the given responses.
@@ -136,7 +135,7 @@ impl LightFetch {
 						let idx = reqs.len();
 						let hash_ref = Field::back_ref(idx, 0);
 						reqs.push(req.into());
-						reqs.push(request::HeaderByHash(hash_ref.clone()).into());
+						reqs.push(light::on_demand::Request::HeaderByHash(request::HeaderByHash(hash_ref)));
 
 						Ok(HeaderRef::Unresolved(idx + 1, hash_ref))
 					}
@@ -174,7 +173,7 @@ impl LightFetch {
 			Err(e) => return Either::A(future::err(e)),
 		};
 
-		reqs.push(request::Account { header: header_ref.clone(), address: address }.into());
+		reqs.push(request::Account { header: header_ref.clone(), address }.into());
 		let account_idx = reqs.len() - 1;
 		reqs.push(request::Code { header: header_ref, code_hash: Field::back_ref(account_idx, 0) }.into());
 
@@ -193,7 +192,7 @@ impl LightFetch {
 			Err(e) => return Either::A(future::err(e)),
 		};
 
-		reqs.push(request::Account { header: header_ref, address: address }.into());
+		reqs.push(request::Account { header: header_ref, address }.into());
 
 		Either::B(self.send_requests(reqs, |mut res|match res.pop() {
 			Some(OnDemandResponse::Account(acc)) => acc,
@@ -223,7 +222,7 @@ impl LightFetch {
 			}
 		};
 
-		let from = req.from.unwrap_or_else(|| Address::zero());
+		let from = req.from.unwrap_or_else(Address::zero);
 		let nonce_fut = match req.nonce {
 			Some(nonce) => Either::A(future::ok(Some(nonce))),
 			None => Either::B(self.account(from, id).map(|acc| acc.map(|a| a.nonce))),
@@ -419,7 +418,7 @@ impl LightFetch {
 
 		Box::new(future::loop_fn(params, move |(sync, on_demand)| {
 			let maybe_future = sync.with_context(|ctx| {
-				let req = request::TransactionIndex(tx_hash.clone().into());
+				let req = request::TransactionIndex(tx_hash.into());
 				on_demand.request(ctx, req)
 			});
 
@@ -499,7 +498,7 @@ impl LightFetch {
 	) -> impl Future<Item = Vec<encoded::Header>, Error = Error> {
 		let fetch_hashes = [from_block, to_block].iter()
 			.filter_map(|block_id| match block_id {
-				BlockId::Hash(hash) => Some(hash.clone()),
+				BlockId::Hash(hash) => Some(*hash),
 				_ => None,
 			})
 			.collect::<Vec<_>>();
@@ -510,14 +509,14 @@ impl LightFetch {
 		self.headers_by_hash(&fetch_hashes[..]).and_then(move |mut header_map| {
 			let (from_block_num, to_block_num) = {
 				let block_number = |id| match id {
-					&BlockId::Earliest => 0,
-					&BlockId::Latest => best_number,
-					&BlockId::Hash(ref h) =>
+					BlockId::Earliest => 0,
+					BlockId::Latest => best_number,
+					BlockId::Hash(ref h) =>
 						header_map.get(h).map(|hdr| hdr.number())
 						.expect("from_block and to_block headers are fetched by hash; this closure is only called on from_block and to_block; qed"),
-					&BlockId::Number(x) => x,
+					BlockId::Number(x) => x,
 				};
-				(block_number(&from_block), block_number(&to_block))
+				(block_number(from_block), block_number(to_block))
 			};
 
 			if to_block_num < from_block_num {
@@ -555,15 +554,13 @@ impl LightFetch {
 		}
 
 		self.send_requests(reqs, move |res| {
-			let headers = refs.drain()
+			refs.into_iter()
 				.map(|(hash, header_ref)| {
 					let hdr = extract_header(&res, header_ref)
-						.expect("these responses correspond to requests that header_ref belongs to; \
-								qed");
+						.expect("these responses correspond to requests that header_ref belongs to; qed");
 					(hash, hdr)
 				})
-				.collect();
-			headers
+				.collect()
 		})
 	}
 
@@ -674,7 +671,7 @@ fn execute_read_only_tx(gas_known: bool, params: ExecuteParams) -> impl Future<I
 							   required, got);
 						if required <= params.hdr.gas_limit() {
 							params.tx.gas = required;
-							return Ok(future::Loop::Continue(params))
+							Ok(future::Loop::Continue(params))
 						} else {
 							warn!(target: "light_fetch",
 								  "Required gas is bigger than block header's gas dropping the request");

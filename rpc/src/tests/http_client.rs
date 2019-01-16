@@ -30,7 +30,7 @@ pub struct Response {
 impl Response {
 	pub fn assert_header(&self, header: &str, value: &str) {
 		let header = format!("{}: {}", header, value);
-		assert!(self.headers.iter().find(|h| *h == &header).is_some(), "Couldn't find header {} in {:?}", header, &self.headers)
+		assert!(self.headers.iter().any(|h| h == &header), "Couldn't find header {} in {:?}", header, &self.headers)
 	}
 
 	pub fn assert_status(&self, status: &str) {
@@ -85,7 +85,7 @@ pub fn request(address: &SocketAddr, request: &str) -> Response {
 
 	let mut response = Vec::new();
 	loop {
-		let mut chunk = [0; 32 *1024];
+		let mut chunk = [0; 32 * 1024];
 		match req.read(&mut chunk) {
 			Err(ref err) if err.kind() == io::ErrorKind::WouldBlock => break,
 			Err(err) => panic!("Unable to read response: {:?}", err),
@@ -102,31 +102,31 @@ pub fn request(address: &SocketAddr, request: &str) -> Response {
 	let body = read_block(&mut lines, true);
 
 	Response {
-		status: status,
-		headers: headers,
-		headers_raw: headers_raw,
-		body: body,
+		status,
+		headers,
+		headers_raw,
+		body,
 	}
 }
 
 /// Check if all required security headers are present
 pub fn assert_security_headers_present(headers: &[String], port: Option<u16>) {
-	if let None = port {
+	if port.is_none() {
 		assert!(
-			headers.iter().find(|header| header.as_str() == "X-Frame-Options: SAMEORIGIN").is_some(),
+			headers.iter().any(|header| header.as_str() == "X-Frame-Options: SAMEORIGIN"),
 			"X-Frame-Options: SAMEORIGIN missing: {:?}", headers
 		);
 	}
 	assert!(
-		headers.iter().find(|header| header.as_str() == "X-XSS-Protection: 1; mode=block").is_some(),
+		headers.iter().any(|header| header.as_str() == "X-XSS-Protection: 1; mode=block"),
 		"X-XSS-Protection missing: {:?}", headers
 	);
 	assert!(
-		headers.iter().find(|header|  header.as_str() == "X-Content-Type-Options: nosniff").is_some(),
+		headers.iter().any(|header| header.as_str() == "X-Content-Type-Options: nosniff"),
 		"X-Content-Type-Options missing: {:?}", headers
 	);
 	assert!(
-		headers.iter().find(|header| header.starts_with("Content-Security-Policy: ")).is_some(),
+		headers.iter().any(|header| header.starts_with("Content-Security-Policy: ")),
 		"Content-Security-Policy missing: {:?}", headers
 	)
 }

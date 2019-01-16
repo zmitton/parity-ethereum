@@ -101,8 +101,8 @@ impl<C, S> Traces for TracesClient<C> where
 			BlockNumber::Pending => return Err(errors::invalid_params("`BlockNumber::Pending` is not supported", ())),
 		};
 
-		let mut state = self.client.state_at(id).ok_or(errors::state_pruned())?;
-		let header = self.client.block_header(id).ok_or(errors::state_pruned())?;
+		let mut state = self.client.state_at(id).ok_or_else(errors::state_pruned)?;
+		let header = self.client.block_header(id).ok_or_else(errors::state_pruned)?;
 
 		self.client.call(&signed, to_call_analytics(flags), &mut state, &header.decode().map_err(errors::decode)?)
 			.map(TraceResults::from)
@@ -128,8 +128,8 @@ impl<C, S> Traces for TracesClient<C> where
 			BlockNumber::Pending => return Err(errors::invalid_params("`BlockNumber::Pending` is not supported", ())),
 		};
 
-		let mut state = self.client.state_at(id).ok_or(errors::state_pruned())?;
-		let header = self.client.block_header(id).ok_or(errors::state_pruned())?;
+		let mut state = self.client.state_at(id).ok_or_else(errors::state_pruned)?;
+		let header = self.client.block_header(id).ok_or_else(errors::state_pruned)?;
 
 		self.client.call_many(&requests, &mut state, &header.decode().map_err(errors::decode)?)
 			.map(|results| results.into_iter().map(TraceResults::from).collect())
@@ -150,8 +150,8 @@ impl<C, S> Traces for TracesClient<C> where
 			BlockNumber::Pending => return Err(errors::invalid_params("`BlockNumber::Pending` is not supported", ())),
 		};
 
-		let mut state = self.client.state_at(id).ok_or(errors::state_pruned())?;
-		let header = self.client.block_header(id).ok_or(errors::state_pruned())?;
+		let mut state = self.client.state_at(id).ok_or_else(errors::state_pruned)?;
+		let header = self.client.block_header(id).ok_or_else(errors::state_pruned)?;
 
 		self.client.call(&signed, to_call_analytics(flags), &mut state, &header.decode().map_err(errors::decode)?)
 			.map(TraceResults::from)
@@ -174,7 +174,7 @@ impl<C, S> Traces for TracesClient<C> where
 		};
 
 		self.client.replay_block_transactions(id, to_call_analytics(flags))
-			.map(|results| results.into_iter().map(TraceResultsWithTransactionHash::from).collect())
+			.map(|results| results.map(TraceResultsWithTransactionHash::from).collect())
 			.map_err(errors::call)
 	}
 }

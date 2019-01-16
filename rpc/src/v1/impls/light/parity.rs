@@ -178,7 +178,7 @@ impl Parity for ParityClient {
 			active: peer_numbers.active,
 			connected: peer_numbers.connected,
 			max: peer_numbers.max as u32,
-			peers: peers,
+			peers,
 		})
 	}
 
@@ -253,7 +253,7 @@ impl Parity for ParityClient {
 			txq.ready_transactions(chain_info.best_block_number, chain_info.best_block_timestamp)
 				.into_iter()
 				.take(limit.unwrap_or_else(usize::max_value))
-				.map(|tx| Transaction::from_pending(tx))
+				.map(Transaction::from_pending)
 				.collect::<Vec<_>>()
 		)
 	}
@@ -261,7 +261,7 @@ impl Parity for ParityClient {
 	fn all_transactions(&self) -> Result<Vec<Transaction>> {
 		Ok(
 			light_all_transactions(&self.light_dispatch)
-				.map(|tx| Transaction::from_pending(tx))
+				.map(Transaction::from_pending)
 				.collect()
 		)
 	}
@@ -280,7 +280,7 @@ impl Parity for ParityClient {
 		Ok(
 			txq.future_transactions(chain_info.best_block_number, chain_info.best_block_timestamp)
 				.into_iter()
-				.map(|tx| Transaction::from_pending(tx))
+				.map(Transaction::from_pending)
 				.collect::<Vec<_>>()
 		)
 	}
@@ -314,7 +314,7 @@ impl Parity for ParityClient {
 
 	fn ws_url(&self) -> Result<String> {
 		helpers::to_url(&self.ws_address)
-			.ok_or_else(|| errors::ws_disabled())
+			.ok_or_else(errors::ws_disabled)
 	}
 
 	fn next_nonce(&self, address: H160) -> BoxFuture<U256> {
@@ -352,7 +352,7 @@ impl Parity for ParityClient {
 			.and_then(|first| chain_info.first_block_number.map(|last| (first, U256::from(last))));
 
 		Ok(ChainStatus {
-			block_gap: gap.map(|(x, y)| (x.into(), y.into())),
+			block_gap: gap
 		})
 	}
 
@@ -392,7 +392,7 @@ impl Parity for ParityClient {
 					seal_fields: header.seal().iter().cloned().map(Into::into).collect(),
 					extra_data: Bytes::new(header.extra_data().clone()),
 				},
-				extra_info: extra_info,
+				extra_info,
 			})
 		};
 		let id = number.unwrap_or_default().to_block_id();

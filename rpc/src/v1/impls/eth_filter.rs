@@ -68,8 +68,8 @@ impl<C, M> EthFilterClient<C, M> {
 	/// Creates new Eth filter client.
 	pub fn new(client: Arc<C>, miner: Arc<M>, poll_lifetime: u32) -> Self {
 		EthFilterClient {
-			client: client,
-			miner: miner,
+			client,
+			miner,
 			polls: Mutex::new(PollManager::new(poll_lifetime)),
 		}
 	}
@@ -168,7 +168,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 	}
 
 	fn filter_changes(&self, index: Index) -> BoxFuture<FilterChanges> {
-		let filter = match self.polls().lock().poll_mut(&index.value()) {
+		let filter = match self.polls().lock().poll_mut(index.value()) {
 			Some(filter) => filter.clone(),
 			None => return Box::new(future::err(errors::filter_not_found())),
 		};
@@ -188,17 +188,14 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 				let mut hashes = Vec::new();
 				for n in (*last_block_number + 1)..=current_number {
 					let block_number = BlockId::Number(n);
-					match self.block_hash(block_number) {
-						Some(hash) => {
-							*last_block_number = n;
-							hashes.push(RpcH256::from(hash));
-							// Only keep the most recent history
-							if recent_reported_hashes.len() >= PollFilter::MAX_BLOCK_HISTORY_SIZE {
-								recent_reported_hashes.pop_back();
-							}
-							recent_reported_hashes.push_front((n, hash));
-						},
-						None => (),
+					if let Some(hash) = self.block_hash(block_number) {
+						*last_block_number = n;
+						hashes.push(RpcH256::from(hash));
+						// Only keep the most recent history
+						if recent_reported_hashes.len() >= PollFilter::MAX_BLOCK_HISTORY_SIZE {
+							recent_reported_hashes.pop_back();
+						}
+						recent_reported_hashes.push_front((n, hash));
 					}
 				}
 
@@ -282,7 +279,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 		let (filter, include_pending) = {
 			let mut polls = self.polls().lock();
 
-			match polls.poll(&index.value()).and_then(|f| f.modify(|filter| match *filter {
+			match polls.poll(index.value()).and_then(|f| f.modify(|filter| match *filter {
 				PollFilter::Logs { ref filter, include_pending, .. } =>
 					Some((filter.clone(), include_pending)),
 				_ => None,
@@ -310,6 +307,6 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 	}
 
 	fn uninstall_filter(&self, index: Index) -> Result<bool> {
-		Ok(self.polls().lock().remove_poll(&index.value()))
+		Ok(self.polls().lock().remove_poll(index.value()))
 	}
 }

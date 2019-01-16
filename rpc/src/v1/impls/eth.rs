@@ -198,7 +198,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> EthClient<C, SN, S
 			accounts: accounts.clone(),
 			external_miner: em.clone(),
 			seed_compute: Mutex::new(SeedHashCompute::default()),
-			options: options,
+			options,
 		}
 	}
 
@@ -283,7 +283,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> EthClient<C, SN, S
 						seal_fields: view.seal().into_iter().map(Into::into).collect(),
 						uncles: block.uncle_hashes().into_iter().map(Into::into).collect(),
 						transactions: match include_txs {
-							true => BlockTransactions::Full(block.view().localized_transactions().into_iter().map(|t| Transaction::from_localized(t)).collect()),
+							true => BlockTransactions::Full(block.view().localized_transactions().into_iter().map(Transaction::from_localized).collect()),
 							false => BlockTransactions::Hashes(block.transaction_hashes().into_iter().map(Into::into).collect()),
 						},
 						extra_data: Bytes::new(view.extra_data()),
@@ -334,7 +334,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> EthClient<C, SN, S
 							cached_sender,
 						}
 					})
-					.map(|tx| Transaction::from_localized(tx));
+					.map(Transaction::from_localized);
 
 				Ok(transaction)
 			}
@@ -385,7 +385,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> EthClient<C, SN, S
 					None => { return Ok(None); }
 				};
 
-				let parent_difficulty = match client.block_total_difficulty(BlockId::Hash(uncle.parent_hash().clone())) {
+				let parent_difficulty = match client.block_total_difficulty(BlockId::Hash(*uncle.parent_hash())) {
 					Some(difficulty) => difficulty,
 					None => { return Ok(None); }
 				};
@@ -404,7 +404,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> EthClient<C, SN, S
 		let block = RichBlock {
 			inner: Block {
 				hash: Some(uncle.hash().into()),
-				size: size,
+				size,
 				parent_hash: uncle.parent_hash().clone().into(),
 				uncles_hash: uncle.uncles_hash().clone().into(),
 				author: uncle.author().clone().into(),
@@ -417,10 +417,10 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> EthClient<C, SN, S
 				logs_bloom: Some(uncle.log_bloom().clone().into()),
 				timestamp: uncle.timestamp().into(),
 				difficulty: uncle.difficulty().clone().into(),
-				total_difficulty: Some((uncle.difficulty().clone() + parent_difficulty).into()),
+				total_difficulty: Some((*uncle.difficulty() + parent_difficulty).into()),
 				receipts_root: uncle.receipts_root().clone().into(),
 				extra_data: uncle.extra_data().clone().into(),
-				seal_fields: uncle.seal().into_iter().cloned().map(Into::into).collect(),
+				seal_fields: uncle.seal().iter().cloned().map(Into::into).collect(),
 				uncles: vec![],
 				transactions: BlockTransactions::Hashes(vec![]),
 			},
@@ -602,7 +602,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> Eth for EthClient<
 		try_bf!(check_known(&*self.client, num.clone()));
 		let res = match self.client.prove_account(key1, id) {
 			Some((proof,account)) => Ok(EthAccount {
-				address: address,
+				address,
 				balance: account.balance.into(),
 				nonce: account.nonce.into(),
 				code_hash: account.code_hash.into(),
@@ -829,7 +829,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> Eth for EthClient<
 	}
 
 	fn logs(&self, filter: Filter) -> BoxFuture<Vec<Log>> {
-		base_logs(&*self.client, &*self.miner, filter.into())
+		base_logs(&*self.client, &*self.miner, filter)
 	}
 
 	fn work(&self, no_new_work_timeout: Trailing<u64>) -> Result<Work> {
@@ -926,8 +926,8 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> Eth for EthClient<
 
 		let (mut state, header) = if num == BlockNumber::Pending {
 			let info = self.client.chain_info();
-			let state = try_bf!(self.miner.pending_state(info.best_block_number).ok_or(errors::state_pruned()));
-			let header = try_bf!(self.miner.pending_block_header(info.best_block_number).ok_or(errors::state_pruned()));
+			let state = try_bf!(self.miner.pending_state(info.best_block_number).ok_or_else(errors::state_pruned));
+			let header = try_bf!(self.miner.pending_block_header(info.best_block_number).ok_or_else(errors::state_pruned));
 
 			(state, header)
 		} else {
@@ -938,8 +938,8 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> Eth for EthClient<
 				BlockNumber::Pending => unreachable!(), // Already covered
 			};
 
-			let state = try_bf!(self.client.state_at(id).ok_or(errors::state_pruned()));
-			let header = try_bf!(self.client.block_header(id).ok_or(errors::state_pruned()).and_then(|h| h.decode().map_err(errors::decode)));
+			let state = try_bf!(self.client.state_at(id).ok_or_else(errors::state_pruned));
+			let header = try_bf!(self.client.block_header(id).ok_or_else(errors::state_pruned).and_then(|h| h.decode().map_err(errors::decode)));
 
 			(state, header)
 		};
@@ -965,8 +965,8 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> Eth for EthClient<
 
 		let (state, header) = if num == BlockNumber::Pending {
 			let info = self.client.chain_info();
-			let state = try_bf!(self.miner.pending_state(info.best_block_number).ok_or(errors::state_pruned()));
-			let header = try_bf!(self.miner.pending_block_header(info.best_block_number).ok_or(errors::state_pruned()));
+			let state = try_bf!(self.miner.pending_state(info.best_block_number).ok_or_else(errors::state_pruned));
+			let header = try_bf!(self.miner.pending_block_header(info.best_block_number).ok_or_else(errors::state_pruned));
 
 			(state, header)
 		} else {
@@ -977,8 +977,8 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> Eth for EthClient<
 				BlockNumber::Pending => unreachable!(), // Already covered
 			};
 
-			let state = try_bf!(self.client.state_at(id).ok_or(errors::state_pruned()));
-			let header = try_bf!(self.client.block_header(id).ok_or(errors::state_pruned()).and_then(|h| h.decode().map_err(errors::decode)));
+			let state = try_bf!(self.client.state_at(id).ok_or_else(errors::state_pruned));
+			let header = try_bf!(self.client.block_header(id).ok_or_else(errors::state_pruned).and_then(|h| h.decode().map_err(errors::decode)));
 
 			(state, header)
 		};

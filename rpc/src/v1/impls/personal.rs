@@ -213,7 +213,7 @@ impl<D: Dispatcher + 'static> Personal for PersonalClient<D> {
 		let data: Bytes = data.into();
 
 		let hash = eth_data_hash(data);
-		let account = recover(&signature.into(), &hash)
+		let account = recover(&signature, &hash)
 			.map_err(errors::encryption)
 			.map(|public| {
 				public_to_address(&public).into()

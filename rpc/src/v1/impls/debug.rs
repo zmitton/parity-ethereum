@@ -65,14 +65,14 @@ impl<C: BlockChainClient + 'static> Debug for DebugClient<C> {
 					timestamp: block.header.timestamp().into(),
 					difficulty: cast(block.header.difficulty()),
 					total_difficulty: None,
-					seal_fields: block.header.seal().into_iter().cloned().map(Into::into).collect(),
+					seal_fields: block.header.seal().iter().cloned().map(Into::into).collect(),
 					uncles: block.uncles.into_iter().map(|u| u.hash().into()).collect(),
 					transactions: BlockTransactions::Full(block.transactions
 						.into_iter()
 						.enumerate()
 						.map(|(transaction_index, signed)| Transaction::from_localized(LocalizedTransaction {
-							block_number: number.into(),
-							block_hash: hash.into(),
+							block_number: number,
+							block_hash: hash,
 							transaction_index,
 							signed,
 							cached_sender: None,

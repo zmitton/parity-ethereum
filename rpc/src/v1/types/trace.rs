@@ -526,10 +526,10 @@ impl From<EthLocalizedTrace> for LocalizedTrace {
 			action: t.action.into(),
 			result: t.result.into(),
 			trace_address: t.trace_address.into_iter().map(Into::into).collect(),
-			subtraces: t.subtraces.into(),
+			subtraces: t.subtraces,
 			transaction_position: t.transaction_number.map(Into::into),
 			transaction_hash: t.transaction_hash.map(Into::into),
-			block_number: t.block_number.into(),
+			block_number: t.block_number,
 			block_hash: t.block_hash.into(),
 		}
 	}
@@ -591,7 +591,7 @@ impl From<FlatTrace> for Trace {
 	fn from(t: FlatTrace) -> Self {
 		Trace {
 			trace_address: t.trace_address.into_iter().map(Into::into).collect(),
-			subtraces: t.subtraces.into(),
+			subtraces: t.subtraces,
 			action: t.action.into(),
 			result: t.result.into(),
 		}

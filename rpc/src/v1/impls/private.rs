@@ -60,7 +60,7 @@ impl Private for PrivateClient {
 			.map_err(errors::rlp)
 			.and_then(|tx| SignedTransaction::new(tx).map_err(errors::transaction))?;
 		let client = self.unwrap_manager()?;
-		let receipt = client.create_private_transaction(signed_transaction).map_err(|e| errors::private_message(e))?;
+		let receipt = client.create_private_transaction(signed_transaction).map_err(errors::private_message)?;
 		Ok(receipt.into())
 	}
 
@@ -77,7 +77,7 @@ impl Private for PrivateClient {
 		};
 
 		let (transaction, contract_address) = client.public_creation_transaction(id, &signed_transaction, addresses.as_slice(), gas_price.into())
-			.map_err(|e| errors::private_message(e))?;
+			.map_err(errors::private_message)?;
 		let tx_hash = transaction.hash(None);
 		let request = TransactionRequest {
 			from: Some(signed_transaction.sender().into()),
@@ -109,13 +109,13 @@ impl Private for PrivateClient {
 		let request = CallRequest::into(request);
 		let signed = fake_sign::sign_call(request)?;
 		let client = self.unwrap_manager()?;
-		let executed_result = client.private_call(id, &signed).map_err(|e| errors::private_message(e))?;
+		let executed_result = client.private_call(id, &signed).map_err(errors::private_message)?;
 		Ok(executed_result.output.into())
 	}
 
 	fn private_contract_key(&self, contract_address: H160) -> Result<H256, Error> {
 		let client = self.unwrap_manager()?;
-		let key = client.contract_key_id(&contract_address.into()).map_err(|e| errors::private_message(e))?;
+		let key = client.contract_key_id(&contract_address.into()).map_err(errors::private_message)?;
 		Ok(key.into())
 	}
 }

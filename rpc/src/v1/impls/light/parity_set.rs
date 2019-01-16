@@ -40,8 +40,8 @@ impl<F: Fetch> ParitySetClient<F> {
 	/// Creates new `ParitySetClient` with given `Fetch`.
 	pub fn new(net: Arc<ManageNetwork>, fetch: F) -> Self {
 		ParitySetClient {
-			net: net,
-			fetch: fetch,
+			net,
+			fetch,
 		}
 	}
 }
