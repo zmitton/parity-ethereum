@@ -128,11 +128,11 @@ impl SyncRequester {
 
 	pub fn request_node_data(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, hashes: Vec<H256>) {
 		let mut rlp = RlpStream::new_list(hashes.len());
-		trace!(target: "sync", "{} <- GetNodeData: {} entries starting from {:?}", peer_id, hashes.len(), hashes.first());
+		trace!(target: "sync", "{} <- GetNodeData: {:?}", peer_id, hashes);
 		for h in &hashes {
 			rlp.append(&h.clone());
 		}
-		SyncRequester::send_request(sync, io, peer_id, PeerAsking::NodeData, GET_NODE_DATA_PACKET, rlp.out());
+		SyncRequester::send_request(sync, io, peer_id, PeerAsking::NodeData(hashes), GET_NODE_DATA_PACKET, rlp.out());
 	}
 
 	/// Request snapshot chunk from a peer.

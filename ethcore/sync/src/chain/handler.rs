@@ -476,16 +476,41 @@ impl SyncHandler {
 	}
 
 	/// Called when NodeData is received from a peer
-	fn on_node_data(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
-		use ethtrie::RlpCodec;
-		use trie::NodeCodec;
+	fn on_node_data(sync: &mut ChainSync, _io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
+		let mut peer_opt = sync.peers.get_mut(&peer_id);
+		let peer = match peer_opt {
+			None => {
+				debug!(target: "sync", "Received packet from unknown peer");
+				return Ok(());
+			},
+			Some(ref mut peer) => {
+				if !peer.can_sync() {
+					trace!(target: "sync", "Ignoring snapshot data from unconfirmed peer {}", peer_id);
+					return Ok(());
+				}
+				peer
+			},
+		};
+		peer.expired = false;
+		peer.block_set = None;
+
+		let node_data_hashes = match ::std::mem::replace(&mut peer.asking, PeerAsking::Nothing) {
+			PeerAsking::NodeData(hashes) => hashes,
+			_ => {
+				trace!(target: "sync", "{}: Ignored unexpected node-data", peer_id);
+				return Ok(());
+			},
+		};
+
+		if sync.state != SyncState::FastWarpTrie {
+			trace!(target: "sync", "{}: Ignored unexpected node-data", peer_id);
+			return Ok(());
+		}
 
 		let item_count = r.item_count().unwrap_or(0);
 		trace!(target: "sync", "{} -> NodeData ({} entries)", peer_id, item_count);
-		for i in 0..item_count {
-			let node = RlpCodec::decode(r.at(i)?.as_raw());
-			trace!(target: "sync", "Item {} : {:?}", i, node);
-		}
+
+		sync.fast_warp.process_node_data(node_data_hashes, r);
 		Ok(())
 	}
 
