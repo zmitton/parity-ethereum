@@ -98,6 +98,9 @@ extern crate kvdb_memorydb;
 #[cfg(test)]
 extern crate fake_fetch;
 
+#[cfg(test)]
+extern crate ethcore_network as network;
+
 extern crate tempdir;
 
 pub extern crate jsonrpc_ws_server as ws;
