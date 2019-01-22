@@ -19,16 +19,14 @@
 #[cfg(test)]
 mod tests;
 
-//use parser;
+use parser;
 use env;
 use runtime::Runtime;
-use wasm_exec_common::{parser, runtime::{self, Context as RuntimeContext}};
+use wasm_exec_common::runtime::{self, Context as RuntimeContext};
 use vm::{GasLeft, ReturnData, ActionParams};
-use pwasm_utils::rules;
 use wasmi::{Error as InterpreterError, Trap};
 use log::trace;
 use ethereum_types::U256;
-
 
 
 /// Wrapped interpreter error
@@ -64,12 +62,6 @@ pub struct WasmInterpreter {
 	params: ActionParams,
 }
 
-impl WasmInterpreter {
-	pub fn new(params: ActionParams) -> Self {
-		WasmInterpreter { params }
-	}
-}
-
 enum ExecutionOutcome {
 	Suicide,
 	Return,
@@ -77,24 +69,29 @@ enum ExecutionOutcome {
 }
 
 impl WasmInterpreter {
+	pub fn new(params: ActionParams) -> Self {
+		WasmInterpreter { params }
+        }
+
 	pub fn run(self: Box<WasmInterpreter>, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
 
-                let rules = rules::Set::new(1, std::collections::BTreeMap::new())
-                        .with_grow_cost(1)
-                        .with_forbidden_floats(); // TODO
+		let (module, data) = parser::payload(&self.params, ext.schedule().wasm())?; // TODO
 
-		let (module, data) = parser::payload(&self.params,
-                                                     &rules,
-                                                     100_000)?; // TODO
+                println!("////////// CONTRACT MODULE = {:#?}", module);
 
-		let loaded_module = wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
+		let loaded_module = wasmi::Module::from_parity_wasm_module(module)
+                        .map_err(Error::Interpreter)?;
 
-		let instantiation_resolver = env::ImportResolver::with_limit(16);
+		let import_resolver = env::ImportResolver::with_limit(32);
+                let imports_builder = wasmi::ImportsBuilder::new()
+                        .with_resolver("env", &import_resolver)
+                        .with_resolver("ethereum", &import_resolver);
 
 		let module_instance = wasmi::ModuleInstance::new(
-			&loaded_module,
-			&wasmi::ImportsBuilder::new().with_resolver("env", &instantiation_resolver)
-		).map_err(Error::Interpreter)?;
+                        &loaded_module,
+                        &imports_builder)
+                        .map_err(Error::Interpreter)?;
+
 
 		let adjusted_gas = self.params.gas * U256::from(ext.schedule().wasm().opcodes_div) /
 			U256::from(ext.schedule().wasm().opcodes_mul);
@@ -103,15 +100,15 @@ impl WasmInterpreter {
 			return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
 		}
 
-		let initial_memory = instantiation_resolver.memory_size().map_err(Error::Interpreter)?;
+		let initial_memory = import_resolver.memory_size().map_err(Error::Interpreter)?;
+
 		trace!(target: "wasm", "Contract requested {:?} pages of initial memory", initial_memory);
 
 		let (gas_left, result) = {
 			let mut runtime = Runtime::with_params(
 				ext,
-				instantiation_resolver.memory_ref(),
-				// cannot overflow, checked above
-				adjusted_gas.low_u64(),
+				import_resolver.memory_ref(),
+				adjusted_gas.low_u64(), // cannot overflow, checked above
 				data.to_vec(),
 				RuntimeContext {
 					address: self.params.address,
@@ -132,7 +129,20 @@ impl WasmInterpreter {
 
 			let module_instance = module_instance.run_start(&mut runtime).map_err(Error::Trap)?;
 
-			let invoke_result = module_instance.invoke_export("call", &[], &mut runtime);
+                        println!("MODULE INSTANCE = {:#?}", module_instance);
+
+			let invoke_result = module_instance.invoke_export("main", &[], &mut runtime);
+
+                        println!("////////// INVOKE RESULT = {:#?}", invoke_result);
+
+                        // TODO: remove... just a peek into first 128 bytes of mem after execution
+                        import_resolver.memory_ref().with_direct_access(|b| {
+                                let mut res = Vec::new();
+                                res.extend_from_slice(b);
+                                unsafe { res.set_len(128); }
+                                println!("////////// MEM = {:?}", res);
+                        });
+
 
 			let mut execution_outcome = ExecutionOutcome::NotSpecial;
 			if let Err(InterpreterError::Trap(ref trap)) = invoke_result {

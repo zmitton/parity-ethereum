@@ -64,12 +64,6 @@ pub struct WasmInterpreter {
 	params: ActionParams,
 }
 
-impl WasmInterpreter {
-	pub fn new(params: ActionParams) -> Self {
-		WasmInterpreter { params }
-	}
-}
-
 enum ExecutionOutcome {
 	Suicide,
 	Return,
@@ -77,7 +71,12 @@ enum ExecutionOutcome {
 }
 
 impl WasmInterpreter {
+	pub fn new(params: ActionParams) -> Self {
+		WasmInterpreter { params }
+	}
+
 	pub fn run(self: Box<WasmInterpreter>, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
+
 		let (module, data) = parser::payload(&self.params, ext.schedule().wasm())?;
 
 		let loaded_module = wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
@@ -89,6 +88,7 @@ impl WasmInterpreter {
 			&wasmi::ImportsBuilder::new().with_resolver("env", &instantiation_resolver)
 		).map_err(Error::Interpreter)?;
 
+
 		let adjusted_gas = self.params.gas * U256::from(ext.schedule().wasm().opcodes_div) /
 			U256::from(ext.schedule().wasm().opcodes_mul);
 
@@ -98,6 +98,7 @@ impl WasmInterpreter {
 		}
 
 		let initial_memory = instantiation_resolver.memory_size().map_err(Error::Interpreter)?;
+
 		trace!(target: "wasm", "Contract requested {:?} pages of initial memory", initial_memory);
 
 		let (gas_left, result) = {

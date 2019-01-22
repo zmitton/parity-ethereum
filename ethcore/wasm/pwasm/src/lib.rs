@@ -22,7 +22,7 @@ extern crate libc;
 extern crate log;
 extern crate vm;
 extern crate wasmi;
-extern crate pwasm_utils;
+extern crate pwasm_utils as wasm_utils;
 extern crate wasm_exec_common;
 
 pub mod env;

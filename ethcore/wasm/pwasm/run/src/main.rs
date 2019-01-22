@@ -55,6 +55,7 @@ fn main() {
 				exit_code = 1;
 				println!("Failed assert in test \"{}\" ('{}'): {}", fixture.caption.as_ref(), target, fail);
 			}
+                        break // TODO remove
 		}
 	}
 

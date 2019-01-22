@@ -205,7 +205,7 @@ pub mod signatures {
 /// entries.
 /// Also manages initial memory request from the runtime.
 pub struct ImportResolver {
-	max_memory: u32,
+        max_memory: u32,
 	memory: RefCell<Option<MemoryRef>>
 }
 
@@ -215,7 +215,7 @@ impl ImportResolver {
 	pub fn with_limit(max_memory: u32) -> ImportResolver {
 		ImportResolver {
 			max_memory: max_memory,
-			memory: RefCell::new(None)
+			memory: RefCell::new(None),
 		}
 	}
 
@@ -230,7 +230,6 @@ impl ImportResolver {
 				*mem_ref = Some(wasm_env::alloc_empty_memory());
 			}
 		}
-
 		self.memory.borrow().clone().expect("it is either existed or was created as (0, 0) above; qed")
 	}
 
@@ -249,7 +248,6 @@ impl wasmi::ModuleImportResolver for ImportResolver {
 		_signature: &Signature
 	) -> std::result::Result<FuncRef, Error> {
                 use self::wasm_env::alloc_func as host;
-
 		let func_ref = match field_name {
 			"useGas" => host(signatures::USE_GAS, ids::USE_GAS_FUNC),
 			"getGasLeft" => host(signatures::GET_GAS_LEFT, ids::GET_GAS_LEFT_FUNC),

@@ -15,7 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use fixture::{Fixture, Assert, CallLocator, Source};
-use wasm::WasmInterpreter;
+use wasm::{self, WasmKind};
 use vm::{self, Exec, GasLeft, ActionParams, ActionValue, ParamsType};
 use vm::tests::FakeExt;
 use std::io::{self, Read};
@@ -31,8 +31,8 @@ fn load_code<P: AsRef<path::Path>>(p: P) -> io::Result<Vec<u8>> {
 	Ok(result)
 }
 
-fn wasm_interpreter(params: ActionParams) -> Box<WasmInterpreter> {
-	Box::new(WasmInterpreter::new(params))
+fn wasm_interpreter(params: ActionParams) -> Box<Exec> {
+        wasm::new(WasmKind::PWasm, params)
 }
 
 #[derive(Debug)]
@@ -139,6 +139,7 @@ pub fn construct(
 }
 
 pub fn run_fixture(fixture: &Fixture) -> Vec<Fail> {
+
 	let mut params = ActionParams::default();
 	let source = match load_code(fixture.source.as_ref()) {
 		Ok(code) => code,

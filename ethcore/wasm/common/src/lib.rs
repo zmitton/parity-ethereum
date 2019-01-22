@@ -21,7 +21,6 @@ extern crate ethereum_types;
 extern crate pwasm_utils;
 extern crate parity_wasm;
 
-pub mod parser;
 pub mod panic_payload;
 pub mod runtime;
 pub mod env;
