@@ -625,6 +625,18 @@ use hash::{KECCAK_EMPTY, KECCAK_NULL_RLP};
 use ethtrie::{TrieDBMut, RlpCodec};
 use trie::{TrieMut, NibbleSlice, NodeCodec, node::Node};
 
+#[derive(Clone, Debug)]
+pub enum NodeDataRequest {
+	/// The request is for a path in the state tree
+	State,
+	/// The request is for a storage path in the account's
+	/// storage trie (the H256 value is the account's hash)
+	Storage(H256),
+	/// The request is for an account's code
+	/// (the H256 value is the account's hash)
+	Code(H256),
+}
+
 pub struct FastWarp {
 	next_account_from: H256,
 	next_storage_from: H256,
@@ -644,6 +656,8 @@ pub struct FastWarp {
 	node_data_queries: HashSet<H256>,
 	// Nibble Prefixes for each key
 	node_data_prefixes: HashMap<H256, Vec<u8>>,
+	// What requests have been sent
+	node_data_requests: HashMap<H256, NodeDataRequest>,
 
 	db: Box<JournalDB>,
 }
@@ -665,8 +679,10 @@ impl FastWarp {
 			state_root: KECCAK_NULL_RLP,
 			finished: false,
 			finished_trie: false,
+
 			node_data_queries: HashSet::new(),
 			node_data_prefixes: HashMap::new(),
+			node_data_requests: HashMap::new(),
 
 			// State root hash of block ??? (on Kovan)
 			fw_target: H256::from_str(
@@ -687,6 +703,7 @@ impl FastWarp {
 		if success {
 			info!("Successful fast-warp!");
 			// First, query the head of the state tree
+			self.node_data_requests.insert(self.sync_target, NodeDataRequest::State);
 			self.node_data_queries = HashSet::from_iter(vec![ self.sync_target ]);
 		} else {
 			warn!("Unsuccessful fast-warp: target={:?} vs. current={:?}", self.fw_target, self.state_root);
@@ -712,20 +729,26 @@ impl FastWarp {
 		let mut accounts_to_insert = Vec::new();
 
 		for (rlp_data, node_data_key) in r.iter().zip(node_data_hashes) {
+			let request = self.node_data_requests.remove(&node_data_key).unwrap();
 			let state_data: Bytes = rlp_data.data().expect("Invalid RLP").to_vec();
+
+			match request {
+				NodeDataRequest::Code(account_hash) => {
+					warn!("Got code request: acc={:?} data={:?}", account_hash, state_data);
+					continue;
+				},
+				_ => (),
+			}
+
 			let node = RlpCodec::decode(&state_data).expect("Invalid RlpCodec");
 
 			let prefix = self.node_data_prefixes.remove(&node_data_key).unwrap_or_default();
+			// The request that was sent should always exist!
 			self.node_data_queries.remove(&node_data_key);
 
 			match node {
 				Node::Empty => (),
 				Node::Leaf(path, data) => {
-					let account_trie = if self.state_root != KECCAK_NULL_RLP {
-						TrieDBMut::from_existing(self.db.as_hashdb_mut(), &mut self.state_root).unwrap()
-					} else {
-						TrieDBMut::new(self.db.as_hashdb_mut(), &mut self.state_root)
-					};
 
 					let prefix_len = prefix.len();
 					let mut nibble_builder = Vec::new();
@@ -744,26 +767,36 @@ impl FastWarp {
 					let nibble_prefix = NibbleSlice::new_offset(&nibble_builder, offset);
 					let hash_nible = NibbleSlice::new_composed(&nibble_prefix, &path);
 
-					let account_hash_vec = hash_nible.encoded(false);
+					let key_vec = hash_nible.encoded(false);
 					// First byte is 0 if length is even ; it should always be 32
-					let account_hash = H256::from_slice(&account_hash_vec[1..]);
+					let key = H256::from_slice(&key_vec[1..]);
+					warn!("Got NodeLeaf: r={:?} ; k={:?} ; data={:?}", request, key, data);
 
-					trace!(target: "sync",
-						"NodeLeaf: {:?} + {:?} = {:?}",
-						prefix, path, account_hash,
-					);
+					match request {
+						NodeDataRequest::State => {
+							let account_hash = key;
+							let account_trie = if self.state_root != KECCAK_NULL_RLP {
+								TrieDBMut::from_existing(self.db.as_hashdb_mut(), &mut self.state_root).unwrap()
+							} else {
+								TrieDBMut::new(self.db.as_hashdb_mut(), &mut self.state_root)
+							};
 
-					let account: BasicAccount = Rlp::new(data).as_val().expect("Invalid Account data");
+							let account: BasicAccount = Rlp::new(data).as_val().expect("Invalid Account data");
 
-					if let Some(account_in_db) = account_trie.get(&account_hash).unwrap() {
-						let account_in_db: BasicAccount = Rlp::new(&account_in_db)
-							.as_val().expect("Invalid Account data in DB");
+							if let Some(account_in_db) = account_trie.get(&account_hash).unwrap() {
+								let account_in_db: BasicAccount = Rlp::new(&account_in_db)
+									.as_val().expect("Invalid Account data in DB");
 
-						if account_in_db != account {
-							accounts_to_insert.push((account_hash, account));
-						}
-					} else {
-						accounts_to_insert.push((account_hash, account));
+								if account_in_db != account {
+									accounts_to_insert.push((account_hash, account));
+								}
+							} else {
+								accounts_to_insert.push((account_hash, account));
+							}
+						},
+						_ => {
+							warn!("Got request...");
+						},
 					}
 				},
 				Node::Extension(path, key_bytes) => {
@@ -784,12 +817,9 @@ impl FastWarp {
 						let mut ext_prefixes = prefix.clone();
 						let mut path_nibbles: Vec<u8> = path.iter().collect();
 						ext_prefixes.append(&mut path_nibbles);
-						trace!(target: "sync",
-							"NodeExtension: {:?} + {:?} = {:?}",
-							prefix, path, ext_prefixes,
-						);
 
 						self.node_data_prefixes.insert(key, ext_prefixes);
+						self.node_data_requests.insert(key, request.clone());
 						self.node_data_queries.insert(key);
 					}
 				},
@@ -815,11 +845,12 @@ impl FastWarp {
 							let mut branch_prefixes = prefix.clone();
 							branch_prefixes.push(branch_idx as u8);
 							self.node_data_prefixes.insert(branch_key, branch_prefixes);
+							self.node_data_requests.insert(branch_key, request.clone());
 							self.node_data_queries.insert(branch_key);
 						}
 					}
 					if let Some(branch_data) = data_opt {
-						warn!("Node Branch Data: {:#?}", branch_data);
+						warn!("Node Branch Data: r={:?} ; d={:#?}", request, branch_data);
 					}
 				},
 			}
@@ -838,9 +869,15 @@ impl FastWarp {
 
 					if account.storage_root != KECCAK_NULL_RLP &&!acct_db.contains(&account.storage_root) {
 						storage_root_queries.insert(account.storage_root);
+
+						self.node_data_requests.insert(account.storage_root, NodeDataRequest::Storage(account_hash.clone()));
+						self.node_data_queries.insert(account.storage_root);
 					}
 					if account.code_hash != KECCAK_EMPTY && !acct_db.contains(&account.code_hash) {
 						code_hash_queries.insert(account.code_hash);
+
+						self.node_data_requests.insert(account.code_hash, NodeDataRequest::Code(account_hash.clone()));
+						self.node_data_queries.insert(account.code_hash);
 					}
 				}
 			}
@@ -1400,6 +1437,7 @@ impl ChainSync {
 						.iter()
 						.map(|h| h.clone())
 						.collect::<Vec<H256>>();
+
 					node_data_hashes.sort_unstable();
 					let n = ::std::cmp::min(20, node_data_hashes.len());
 					node_data_hashes = node_data_hashes[0..n].to_vec();
