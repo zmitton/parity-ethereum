@@ -10,7 +10,3 @@ wasmi = "0.3.0"
 pwasm-utils = "0.2.2"
 parity-wasm = "0.31"
 vm = { path = "../../vm" }
-
-#log = "0.4"
-#libc = "0.2"
-#ethcore-logger = { path = "../../../logger" }

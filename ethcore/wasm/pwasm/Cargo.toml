@@ -12,5 +12,4 @@ libc = "0.2"
 pwasm-utils = "0.2.2"
 vm = { path = "../../vm" }
 wasmi = "0.3.0"
-ethcore-logger = { path = "../../../logger" }
 wasm-exec-common = { path = "../common" }

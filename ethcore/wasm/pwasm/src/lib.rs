@@ -15,7 +15,7 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 extern crate byteorder;
-extern crate ethcore_logger;
+// extern crate ethcore_logger;
 extern crate ethereum_types;
 extern crate parity_wasm;
 extern crate libc;

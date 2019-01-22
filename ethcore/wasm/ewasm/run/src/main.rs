@@ -22,7 +22,7 @@ extern crate ethjson;
 extern crate wasm;
 extern crate vm;
 extern crate clap;
-extern crate ethcore_logger;
+// extern crate ethcore_logger;
 extern crate rustc_hex;
 extern crate keccak_hash as hash;
 
@@ -32,7 +32,7 @@ mod runner;
 use clap::{App, Arg};
 
 fn main() {
-	ethcore_logger::init_log();
+//	ethcore_logger::init_log();
 
 	let matches = App::new("ewasm-run-test")
 		.arg(Arg::with_name("target")

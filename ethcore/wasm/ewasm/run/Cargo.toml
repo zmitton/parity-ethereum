@@ -12,7 +12,6 @@ ethjson = { path = "../../../../json" }
 vm = { path = "../../../vm" }
 wasm = { path = "../../" }
 clap = "2.24"
-ethcore-logger = { path = "../../../../logger" }
 rustc-hex = "1"
 keccak-hash = "0.1"
 
