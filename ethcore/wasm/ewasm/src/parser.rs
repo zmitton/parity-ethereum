@@ -17,28 +17,28 @@
 //! ActionParams parser for wasm
 
 use vm;
-// use wasm_utils::rules;
-use parity_wasm::{peek_size, elements::{self, Deserialize}};
+use wasm_utils::{self, rules, GasPrecision};
+use parity_wasm::elements::{self, Deserialize};
 
-// fn gas_rules(wasm_costs: &vm::WasmCosts) -> rules::Set {
-// 	rules::Set::new(
-// 		wasm_costs.regular,
-// 		{
-// 			let mut vals = ::std::collections::BTreeMap::new();
-// 			vals.insert(rules::InstructionType::Load, rules::Metering::Fixed(wasm_costs.mem as u32));
-// 			vals.insert(rules::InstructionType::Store, rules::Metering::Fixed(wasm_costs.mem as u32));
-// 			vals.insert(rules::InstructionType::Div, rules::Metering::Fixed(wasm_costs.div as u32));
-// 			vals.insert(rules::InstructionType::Mul, rules::Metering::Fixed(wasm_costs.mul as u32));
-// 			vals
-// 		})
-// 		.with_grow_cost(wasm_costs.grow_mem)
-// 		.with_forbidden_floats()
-// }
+fn gas_rules(wasm_costs: &vm::WasmCosts) -> rules::Set {
+	rules::Set::new(
+		wasm_costs.regular,
+		{
+			let mut vals = ::std::collections::BTreeMap::new();
+			vals.insert(rules::InstructionType::Load, rules::Metering::Fixed(wasm_costs.mem as u32));
+			vals.insert(rules::InstructionType::Store, rules::Metering::Fixed(wasm_costs.mem as u32));
+			vals.insert(rules::InstructionType::Div, rules::Metering::Fixed(wasm_costs.div as u32));
+			vals.insert(rules::InstructionType::Mul, rules::Metering::Fixed(wasm_costs.mul as u32));
+			vals
+		})
+		.with_grow_cost(wasm_costs.grow_mem)
+		.with_forbidden_floats()
+}
 
 /// Splits payload to code and data according to params.params_type, also
 /// loads the module instance from payload and injects gas counter according
 /// to schedule.
-pub fn payload<'a>(params: &'a vm::ActionParams, _wasm_costs: &vm::WasmCosts)
+pub fn payload<'a>(params: &'a vm::ActionParams, wasm_costs: &vm::WasmCosts)
 	-> Result<(elements::Module, &'a [u8]), vm::Error>
 {
 	let code = match params.code {
@@ -48,7 +48,7 @@ pub fn payload<'a>(params: &'a vm::ActionParams, _wasm_costs: &vm::WasmCosts)
 
 	let (mut cursor, data_position) = match params.params_type {
 		vm::ParamsType::Embedded => {
-			let module_size = peek_size(&*code);
+			let module_size = parity_wasm::peek_size(&*code);
 			(std::io::Cursor::new(&code[..module_size]), module_size)
 		},
 		vm::ParamsType::Separate => {
@@ -62,20 +62,16 @@ pub fn payload<'a>(params: &'a vm::ActionParams, _wasm_costs: &vm::WasmCosts)
 		})?;
 
         // TODO: come back to this later
-        // EWASM has non-empty memory section
-        // remove memory section, add import "env" "memory"
         let fixed_module = fix_memory(deserialized_module);
 
-        // puts gas counter function in `env` module under `gas` name...
-        // needs to be in `ethereum` as `useGas`
-        //
         // TODO: should be done by sentinel contract
-        //
-        //
-	// let contract_module = pwasm_utils::inject_gas_counter(
-	// 	deserialized_module,
-	// 	&gas_rules(wasm_costs),
-	// ).map_err(|_| vm::Error::Wasm(format!("Wasm contract error: bytecode invalid")))?;
+	let contract_module = wasm_utils::inject_gas_counter2(
+                fixed_module,
+                &gas_rules(wasm_costs),
+                "ethereum",
+                "useGas",
+                &GasPrecision::Bits64)
+                .map_err(|_| vm::Error::Wasm(format!("Wasm contract error: bytecode invalid")))?;
 
         // hmm, not found in EWASM?
         //
@@ -96,8 +92,7 @@ pub fn payload<'a>(params: &'a vm::ActionParams, _wasm_costs: &vm::WasmCosts)
 		}
 	};
 
-	//Ok((contract_module, data))
-        Ok((fixed_module, data))
+	Ok((contract_module, data))
 }
 
 // what's coming from EWASM test suite doesn't have all bits in place as we need them
@@ -117,11 +112,7 @@ fn fix_memory(mut module: elements::Module) -> elements::Module {
 
         // add to import section for memory
         builder::from_module(module)
-                .import()
-                .module("env")
-                .field("memory")
-                .external()
-                .memory(min_pages, Some(min_pages))
-                .build()
+                .import().module("env").field("memory")
+                .external().memory(min_pages, Some(min_pages)).build()
                 .build()
 }

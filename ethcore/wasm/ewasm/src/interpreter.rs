@@ -80,7 +80,10 @@ impl WasmInterpreter {
                 println!("////////// CONTRACT MODULE = {:#?}", module);
 
 		let loaded_module = wasmi::Module::from_parity_wasm_module(module)
-                        .map_err(Error::Interpreter)?;
+                        .map_err(|e| {
+                                println!("WASMI MODULE ERROR = {:#?}", e);
+                                Error::Interpreter(e)
+                        })?;
 
 		let import_resolver = env::ImportResolver::with_limit(32);
                 let imports_builder = wasmi::ImportsBuilder::new()
@@ -90,8 +93,10 @@ impl WasmInterpreter {
 		let module_instance = wasmi::ModuleInstance::new(
                         &loaded_module,
                         &imports_builder)
-                        .map_err(Error::Interpreter)?;
-
+                        .map_err(|e| {
+                                println!("MODULE INSTANCE ERROR = {:#?}", e);
+                                Error::Interpreter(e)
+                        })?;
 
 		let adjusted_gas = self.params.gas * U256::from(ext.schedule().wasm().opcodes_div) /
 			U256::from(ext.schedule().wasm().opcodes_mul);
@@ -129,19 +134,16 @@ impl WasmInterpreter {
 
 			let module_instance = module_instance.run_start(&mut runtime).map_err(Error::Trap)?;
 
-                        println!("MODULE INSTANCE = {:#?}", module_instance);
-
 			let invoke_result = module_instance.invoke_export("main", &[], &mut runtime);
 
-                        println!("////////// INVOKE RESULT = {:#?}", invoke_result);
-
-                        // TODO: remove... just a peek into first 128 bytes of mem after execution
-                        import_resolver.memory_ref().with_direct_access(|b| {
-                                let mut res = Vec::new();
-                                res.extend_from_slice(b);
-                                unsafe { res.set_len(128); }
-                                println!("////////// MEM = {:?}", res);
-                        });
+                        { // TODO: remove... just a peek into first 128 bytes of mem ...
+                                import_resolver.memory_ref().with_direct_access(|b| {
+                                        let mut res = Vec::new();
+                                        res.extend_from_slice(b);
+                                        unsafe { res.set_len(128); }
+                                        println!("////////// MEM = {:?}", res);
+                                });
+                        }
 
 
 			let mut execution_outcome = ExecutionOutcome::NotSpecial;
