@@ -20,14 +20,13 @@ use std::path::Path;
 use ethereum_types::Bloom;
 use ethcore::error::Error;
 use rlp;
-use super::kvdb_rocksdb::DatabaseConfig;
-use super::open_database;
+use super::{KvdbBackend, open_database};
 
 const LOG_BLOOMS_ELEMENTS_PER_INDEX: u64 = 16;
 
-pub fn migrate_blooms<P: AsRef<Path>>(path: P, config: &DatabaseConfig) -> Result<(), Error> {
+pub fn migrate_blooms<P: AsRef<Path>>(path: P, backend: KvdbBackend) -> Result<(), Error> {
 	// init
-	let db = open_database(&path.as_ref().to_string_lossy(), config)?;
+	let db = open_database(&path.as_ref().to_string_lossy(), backend)?;
 
 	// possible optimization:
 	// pre-allocate space on disk for faster migration

@@ -16,8 +16,9 @@
 
 use std::path::Path;
 use ethcore_db::NUM_COLUMNS;
-use ethcore::client::{ClientConfig, DatabaseCompactionProfile};
+use ethcore::client::{ClientConfig, DatabaseCompactionProfile, DatabaseBackend};
 use super::kvdb_rocksdb::{CompactionProfile, DatabaseConfig};
+use super::KvdbBackend;
 
 pub fn compaction_profile(profile: &DatabaseCompactionProfile, db_path: &Path) -> CompactionProfile {
 	match profile {
@@ -27,11 +28,16 @@ pub fn compaction_profile(profile: &DatabaseCompactionProfile, db_path: &Path) -
 	}
 }
 
-pub fn client_db_config(client_path: &Path, client_config: &ClientConfig) -> DatabaseConfig {
-	let mut client_db_config = DatabaseConfig::with_columns(NUM_COLUMNS);
+pub fn client_db_config(client_path: &Path, client_config: &ClientConfig) -> KvdbBackend {
+	match client_config.db_backend {
+		DatabaseBackend::Lmdb => KvdbBackend::Lmdb,
+		DatabaseBackend::RocksDB { ref db_cache_size, ref db_compaction } => {
+			let mut config = DatabaseConfig::with_columns(NUM_COLUMNS);
 
-	client_db_config.memory_budget = client_config.db_cache_size;
-	client_db_config.compaction = compaction_profile(&client_config.db_compaction, &client_path);
-
-	client_db_config
+			config.memory_budget = db_cache_size;
+			config.compaction = compaction_profile(db_compaction, &client_path);
+ 
+			KvdbBackend::RocksDB { config }
+		} 
+	}
 }

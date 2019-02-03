@@ -27,7 +27,7 @@ const DEFAULT_STATE_CACHE_SIZE: u32 = 25;
 
 /// Configuration for application cache sizes.
 /// All	values are represented in MB.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct CacheConfig {
 	/// Size of rocksDB cache. Almost all goes to the state column.
 	db: u32,

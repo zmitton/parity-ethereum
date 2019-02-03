@@ -27,7 +27,7 @@ pub use trace::Config as TraceConfig;
 pub use evm::VMType;
 
 /// Client state db compaction profile
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum DatabaseCompactionProfile {
 	/// Try to determine compaction profile automatically
 	Auto,
@@ -82,6 +82,20 @@ impl Display for Mode {
 	}
 }
 
+/// Which database to use.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum DatabaseBackend {
+	/// LMDB
+	Lmdb,
+	/// RocksDB
+	RocksDB {
+		/// RocksDB column cache-size if not default
+		db_cache_size: Option<usize>,
+		/// State db compaction profile
+		db_compaction: DatabaseCompactionProfile,
+	},
+}
+
 /// Client configuration. Includes configs for all sub-systems.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ClientConfig {
@@ -99,10 +113,8 @@ pub struct ClientConfig {
 	pub pruning: journaldb::Algorithm,
 	/// The name of the client instance.
 	pub name: String,
-	/// RocksDB column cache-size if not default
-	pub db_cache_size: Option<usize>,
-	/// State db compaction profile
-	pub db_compaction: DatabaseCompactionProfile,
+	/// The database backend.
+	pub db_backend: DatabaseBackend,
 	/// Operating mode
 	pub mode: Mode,
 	/// The chain spec name
@@ -138,8 +150,10 @@ impl Default for ClientConfig {
 			fat_db: false,
 			pruning: journaldb::Algorithm::OverlayRecent,
 			name: "default".into(),
-			db_cache_size: None,
-			db_compaction: Default::default(),
+			db_backend: DatabaseBackend::RocksDB {
+				db_cache_size: None,
+				db_compaction: Default::default(),
+			},
 			mode: Mode::Active,
 			spec_name: "".into(),
 			verifier_type: VerifierType::Canon,
