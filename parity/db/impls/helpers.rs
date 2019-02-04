@@ -34,7 +34,7 @@ pub fn client_db_config(client_path: &Path, client_config: &ClientConfig) -> Kvd
 		DatabaseBackend::RocksDB { ref db_cache_size, ref db_compaction } => {
 			let mut config = DatabaseConfig::with_columns(NUM_COLUMNS);
 
-			config.memory_budget = db_cache_size;
+			config.memory_budget = *db_cache_size;
 			config.compaction = compaction_profile(db_compaction, &client_path);
  
 			KvdbBackend::RocksDB { config }
