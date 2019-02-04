@@ -21,9 +21,11 @@ use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering as AtomicOrdering};
 use std::sync::{Arc, Weak};
 use std::time::{Instant, Duration};
 
-use blockchain::{BlockReceipts, BlockChain, BlockChainDB, BlockProvider, TreeRoute, ImportRoute, TransactionAddress, ExtrasInsert};
+use blockchain::{BlockReceipts, BlockChain, BlockChainDB, BlockProvider, TreeRoute, ImportRoute, TransactionAddress, ExtrasInsert, BlockNumberKey};
 use bytes::Bytes;
+use call_contract::{CallContract, RegistryInfo};
 use ethcore_miner::pool::VerifiedTransaction;
+use ethcore_miner::service_transaction_checker::ServiceTransactionChecker;
 use ethereum_types::{H256, Address, U256};
 use evm::Schedule;
 use hash::keccak;
@@ -46,11 +48,11 @@ use vm::{EnvInfo, LastHashes};
 use block::{IsBlock, LockedBlock, Drain, ClosedBlock, OpenBlock, enact_verified, SealedBlock};
 use client::ancient_import::AncientVerifier;
 use client::{
-	Nonce, Balance, ChainInfo, BlockInfo, CallContract, TransactionInfo,
-	RegistryInfo, ReopenBlock, PrepareOpenBlock, ScheduleInfo, ImportSealedBlock,
+	Nonce, Balance, ChainInfo, BlockInfo, TransactionInfo,
+	ReopenBlock, PrepareOpenBlock, ScheduleInfo, ImportSealedBlock,
 	BroadcastProposalBlock, ImportBlock, StateOrBlock, StateInfo, StateClient, Call,
 	AccountData, BlockChain as BlockChainTrait, BlockProducer, SealedBlockImporter,
-	ClientIoMessage,
+	ClientIoMessage, BlockChainReset
 };
 use client::{
 	BlockId, TransactionId, UncleId, TraceId, ClientConfig, BlockChainClient,
@@ -82,12 +84,14 @@ use ethtrie::{TrieDB};
 use account_db::AccountDB;
 use rlp::{RlpStream};
 use types::basic_account::BasicAccount;
+use ansi_term::Colour;
 
 // re-export
 pub use types::blockchain_info::BlockChainInfo;
 pub use types::block_status::BlockStatus;
 pub use blockchain::CacheSize as BlockChainCacheSize;
 pub use verification::QueueInfo as BlockQueueInfo;
+use db::Writable;
 
 use_contract!(registry, "res/contracts/registrar.json");
 
@@ -474,6 +478,7 @@ impl Importer {
 	// it is for reconstructing the state transition.
 	//
 	// The header passed is from the original block data and is sealed.
+	// TODO: should return an error if ImportRoute is none, issue #9910
 	fn commit_block<B>(&self, block: B, header: &Header, block_data: encoded::Block, client: &Client) -> ImportRoute where B: Drain {
 		let hash = &header.hash();
 		let number = header.number();
@@ -1329,6 +1334,48 @@ impl snapshot::DatabaseRestore for Client {
 		*state_db = StateDB::new(journaldb::new(db.key_value().clone(), self.pruning, ::db::COL_STATE), cache_size);
 		*chain = Arc::new(BlockChain::new(self.config.blockchain.clone(), &[], db.clone()));
 		*tracedb = TraceDB::new(self.config.tracing.clone(), db.clone(), chain.clone());
+		Ok(())
+	}
+}
+
+impl BlockChainReset for Client {
+	fn reset(&self, num: u32) -> Result<(), String> {
+		if num as u64 > self.pruning_history() {
+			return Err("Attempting to reset to block with pruned state".into())
+		}
+
+		let (blocks_to_delete, best_block_hash) = self.chain.read()
+			.block_headers_from_best_block(num)
+			.ok_or("Attempted to reset past genesis block")?;
+
+		let mut db_transaction = DBTransaction::with_capacity((num + 1) as usize);
+
+		for hash in &blocks_to_delete {
+			db_transaction.delete(::db::COL_HEADERS, &hash.hash());
+			db_transaction.delete(::db::COL_BODIES, &hash.hash());
+			db_transaction.delete(::db::COL_EXTRA, &hash.hash());
+			Writable::delete::<H256, BlockNumberKey>
+				(&mut db_transaction, ::db::COL_EXTRA, &hash.number());
+		}
+
+		// update the new best block hash
+		db_transaction.put(::db::COL_EXTRA, b"best", &*best_block_hash);
+
+		self.db.read()
+			.key_value()
+			.write(db_transaction)
+			.map_err(|err| format!("could not complete reset operation; io error occured: {}", err))?;
+
+		let hashes = blocks_to_delete.iter().map(|b| b.hash()).collect::<Vec<_>>();
+
+		info!("Deleting block hashes {}",
+			Colour::Red
+				.bold()
+				.paint(format!("{:#?}", hashes))
+		);
+
+		info!("New best block hash {}", Colour::Green.bold().paint(format!("{:?}", best_block_hash)));
+
 		Ok(())
 	}
 }
@@ -2213,11 +2260,16 @@ impl BlockChainClient for Client {
 
 	fn transact_contract(&self, address: Address, data: Bytes) -> Result<(), transaction::Error> {
 		let authoring_params = self.importer.miner.authoring_params();
+		let service_transaction_checker = ServiceTransactionChecker::default();
+		let gas_price = match service_transaction_checker.check_address(self, authoring_params.author) {
+			Ok(true) => U256::zero(),
+			_ => self.importer.miner.sensible_gas_price(),
+		};
 		let transaction = transaction::Transaction {
 			nonce: self.latest_nonce(&authoring_params.author),
 			action: Action::Call(address),
 			gas: self.importer.miner.sensible_gas_limit(),
-			gas_price: self.importer.miner.sensible_gas_price(),
+			gas_price,
 			value: U256::zero(),
 			data: data,
 		};
