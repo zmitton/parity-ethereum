@@ -158,9 +158,21 @@ pub struct CommonParams {
 impl CommonParams {
 	/// Schedule for an EVM in the post-EIP-150-era of the Ethereum main net.
 	pub fn schedule(&self, block_number: u64) -> ::vm::Schedule {
-		if block_number < self.eip150_transition {
-			::vm::Schedule::new_homestead()
-		} else {
+		// if block_number < self.eip150_transition {
+		// 	::vm::Schedule::new_homestead()
+		// } else {
+		// 	let max_code_size = self.max_code_size(block_number);
+		// 	let mut schedule = ::vm::Schedule::new_post_eip150(
+		// 		max_code_size as _,
+		// 		block_number >= self.eip160_transition,
+		// 		block_number >= self.eip161abc_transition,
+		// 		block_number >= self.eip161d_transition
+		// 	);
+
+		// 	self.update_schedule(block_number, &mut schedule);
+		// 	schedule
+		// }
+
 			let max_code_size = self.max_code_size(block_number);
 			let mut schedule = ::vm::Schedule::new_post_eip150(
 				max_code_size as _,
@@ -171,7 +183,7 @@ impl CommonParams {
 
 			self.update_schedule(block_number, &mut schedule);
 			schedule
-		}
+
 	}
 
 	/// Returns max code size at given block.
@@ -201,7 +213,7 @@ impl CommonParams {
 				false => ::vm::CleanDustMode::BasicOnly,
 			};
 		}
-		if block_number >= self.wasm_activation_transition {
+		//if block_number >= self.wasm_activation_transition {
 			let mut wasm = ::vm::WasmCosts::default();
 			if block_number >= self.kip4_transition {
 				wasm.have_create2 = true;
@@ -210,7 +222,7 @@ impl CommonParams {
 				wasm.have_gasleft = true;
 			}
 			schedule.wasm = Some(wasm);
-		}
+		//}
 	}
 
 	/// Return Some if the current parameters contain a bugfix hard fork not on block 0.
