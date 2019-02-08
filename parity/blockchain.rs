@@ -25,9 +25,10 @@ use hash::{keccak, KECCAK_NULL_RLP};
 use ethereum_types::{U256, H256, Address};
 use bytes::ToPretty;
 use rlp::PayloadInfo;
-use ethcore::account_provider::AccountProvider;
-use ethcore::client::{Mode, DatabaseCompactionProfile, VMType, Nonce, Balance, BlockChainClient, BlockId, BlockInfo,
-	ImportBlock, BlockChainReset};
+use ethcore::client::{
+	Mode, DatabaseCompactionProfile, VMType, Nonce, Balance, BlockChainClient, BlockId, BlockInfo, ImportBlock, BlockChainReset, 
+	DatabaseBackend,
+};
 use ethcore::error::{ImportErrorKind, ErrorKind as EthcoreErrorKind, Error as EthcoreError};
 use ethcore::miner::Miner;
 use ethcore::verification::queue::VerifierSettings;
@@ -85,7 +86,7 @@ pub struct ResetBlockchain {
 	pub pruning_memory: usize,
 	pub tracing: Switch,
 	pub fat_db: Switch,
-	pub compaction: DatabaseCompactionProfile,
+	pub db_backend: DatabaseBackend,
 	pub cache_config: CacheConfig,
 	pub num: u32,
 }
@@ -107,7 +108,7 @@ pub struct ImportBlockchain {
 	pub pruning: Pruning,
 	pub pruning_history: u64,
 	pub pruning_memory: usize,
-	pub compaction: DatabaseCompactionProfile,
+	pub db_backend: DatabaseBackend,
 	pub tracing: Switch,
 	pub fat_db: Switch,
 	pub vm_type: VMType,
@@ -128,7 +129,7 @@ pub struct ExportBlockchain {
 	pub pruning: Pruning,
 	pub pruning_history: u64,
 	pub pruning_memory: usize,
-	pub compaction: DatabaseCompactionProfile,
+	pub db_backend: DatabaseBackend,
 	pub fat_db: Switch,
 	pub tracing: Switch,
 	pub from_block: BlockId,
@@ -147,7 +148,7 @@ pub struct ExportState {
 	pub pruning: Pruning,
 	pub pruning_history: u64,
 	pub pruning_memory: usize,
-	pub compaction: DatabaseCompactionProfile,
+	pub db_backend: DatabaseBackend,
 	pub fat_db: Switch,
 	pub tracing: Switch,
 	pub at: BlockId,
@@ -203,7 +204,7 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	let client_path = db_dirs.client_path(algorithm);
 
 	// execute upgrades
-	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.compaction)?;
+	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.db_backend)?;
 
 	// create dirs used by parity
 	cmd.dirs.create_dirs(false, false)?;
@@ -225,8 +226,7 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 
 	// initialize database.
 	let db = db::open_db(&client_path.to_str().expect("DB path could not be converted to string."),
-						 &cmd.cache_config,
-						 &cmd.compaction).map_err(|e| format!("Failed to open database: {:?}", e))?;
+						 &cmd.db_backend).map_err(|e| format!("Failed to open database: {:?}", e))?;
 
 	// TODO: could epoch signals be avilable at the end of the file?
 	let fetch = ::light::client::fetch::unavailable();
@@ -356,7 +356,7 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 	let snapshot_path = db_dirs.snapshot_path();
 
 	// execute upgrades
-	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.compaction)?;
+	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.db_backend)?;
 
 	// create dirs used by parity
 	cmd.dirs.create_dirs(false, false)?;
@@ -368,7 +368,7 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 		Mode::Active,
 		tracing,
 		fat_db,
-		cmd.compaction,
+		cmd.db_backend,
 		cmd.vm_type,
 		"".into(),
 		algorithm,
@@ -395,8 +395,9 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 		// TODO [ToDr] don't use test miner here
 		// (actually don't require miner at all)
 		Arc::new(Miner::new_for_tests(&spec, None)),
-		Arc::new(AccountProvider::transient_provider()),
+		Arc::new(ethcore_private_tx::DummySigner),
 		Box::new(ethcore_private_tx::NoopEncryptor),
+		Default::default(),
 		Default::default(),
 	).map_err(|e| format!("Client service error: {:?}", e))?;
 
@@ -512,7 +513,7 @@ fn start_client(
 	pruning_memory: usize,
 	tracing: Switch,
 	fat_db: Switch,
-	compaction: DatabaseCompactionProfile,
+	db_backend: DatabaseBackend,
 	cache_config: CacheConfig,
 	require_fat_db: bool,
 	max_round_blocks_to_import: usize,
@@ -550,7 +551,7 @@ fn start_client(
 	let snapshot_path = db_dirs.snapshot_path();
 
 	// execute upgrades
-	execute_upgrades(&dirs.base, &db_dirs, algorithm, &compaction)?;
+	execute_upgrades(&dirs.base, &db_dirs, algorithm, &db_backend)?;
 
 	// create dirs used by parity
 	dirs.create_dirs(false, false)?;
@@ -562,7 +563,7 @@ fn start_client(
 		Mode::Active,
 		tracing,
 		fat_db,
-		compaction,
+		db_backend,
 		VMType::default(),
 		"".into(),
 		algorithm,
@@ -586,8 +587,9 @@ fn start_client(
 		// It's fine to use test version here,
 		// since we don't care about miner parameters at all
 		Arc::new(Miner::new_for_tests(&spec, None)),
-		Arc::new(AccountProvider::transient_provider()),
+		Arc::new(ethcore_private_tx::DummySigner),
 		Box::new(ethcore_private_tx::NoopEncryptor),
+		Default::default(),
 		Default::default(),
 	).map_err(|e| format!("Client service error: {:?}", e))?;
 
@@ -604,7 +606,7 @@ fn execute_export(cmd: ExportBlockchain) -> Result<(), String> {
 		cmd.pruning_memory,
 		cmd.tracing,
 		cmd.fat_db,
-		cmd.compaction,
+		cmd.db_backend,
 		cmd.cache_config,
 		false,
 		cmd.max_round_blocks_to_import,
@@ -649,7 +651,7 @@ fn execute_export_state(cmd: ExportState) -> Result<(), String> {
 		cmd.pruning_memory,
 		cmd.tracing,
 		cmd.fat_db,
-		cmd.compaction,
+		cmd.db_backend,
 		cmd.cache_config,
 		true,
 		cmd.max_round_blocks_to_import,
@@ -736,7 +738,7 @@ fn execute_reset(cmd: ResetBlockchain) -> Result<(), String> {
 		cmd.pruning_memory,
 		cmd.tracing,
 		cmd.fat_db,
-		cmd.compaction,
+		cmd.db_backend,
 		cmd.cache_config,
 		false,
 		0,

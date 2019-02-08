@@ -21,7 +21,7 @@ use std::fs::File;
 use std::collections::HashSet;
 use ethereum_types::{U256, clean_0x, Address};
 use journaldb::Algorithm;
-use ethcore::client::{Mode, BlockId, VMType, DatabaseCompactionProfile, ClientConfig, VerifierType};
+use ethcore::client::{Mode, BlockId, VMType, ClientConfig, DatabaseBackend, VerifierType};
 use ethcore::miner::{PendingSet, Penalization};
 use miner::pool::PrioritizationStrategy;
 use cache::CacheConfig;
@@ -217,7 +217,7 @@ pub fn to_client_config(
 	mode: Mode,
 	tracing: bool,
 	fat_db: bool,
-	compaction: DatabaseCompactionProfile,
+	db_backend: DatabaseBackend,
 	vm_type: VMType,
 	name: String,
 	pruning: Algorithm,
@@ -234,7 +234,7 @@ pub fn to_client_config(
 	// in bytes
 	client_config.blockchain.pref_cache_size = cache_config.blockchain() as usize * 3 / 4 * mb;
 	// db cache size, in megabytes
-	client_config.db_cache_size = Some(cache_config.db_cache_size() as usize);
+	client_config.db_backend = db_backend;
 	// db queue cache size, in bytes
 	client_config.queue.max_mem_use = cache_config.queue() as usize * mb;
 	// in bytes
@@ -253,7 +253,6 @@ pub fn to_client_config(
 	client_config.fat_db = fat_db;
 	client_config.pruning = pruning;
 	client_config.history = pruning_history;
-	client_config.db_compaction = compaction;
 	client_config.vm_type = vm_type;
 	client_config.name = name;
 	client_config.verifier_type = if check_seal { VerifierType::Canon } else { VerifierType::CanonNoSeal };
@@ -266,7 +265,7 @@ pub fn execute_upgrades(
 	base_path: &str,
 	dirs: &DatabaseDirectories,
 	pruning: Algorithm,
-	compaction_profile: &DatabaseCompactionProfile
+	db_backend: &DatabaseBackend,
 ) -> Result<(), String> {
 
 	upgrade_data_paths(base_path, dirs, pruning);
@@ -282,7 +281,7 @@ pub fn execute_upgrades(
 	}
 
 	let client_path = dirs.db_path(pruning);
-	migrate(&client_path, compaction_profile).map_err(|e| format!("{}", e))
+	migrate(&client_path, db_backend).map_err(|e| format!("{}", e))
 }
 
 /// Prompts user asking for password.

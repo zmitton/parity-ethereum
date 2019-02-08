@@ -891,6 +891,10 @@ usage! {
 			"--cache-size-state=[MB]",
 			"Specify the maximum size of memory to use for the state cache.",
 
+			ARG arg_db_backend: (String) = "rocksdb", or |c: &Config| c.footprint.as_ref()?.db_backend.clone(),
+			"--db-backend=[DB]",
+			"Which database to use. DB may be one of: rocksdb or lmdb.",
+
 			ARG arg_db_compaction: (String) = "auto", or |c: &Config| c.footprint.as_ref()?.db_compaction.clone(),
 			"--db-compaction=[TYPE]",
 			"Database compaction type. TYPE may be one of: ssd - suitable for SSDs and fast HDDs; hdd - suitable for slow HDDs; auto - determine automatically.",
@@ -1397,6 +1401,7 @@ struct Footprint {
 	cache_size_blocks: Option<u32>,
 	cache_size_queue: Option<u32>,
 	cache_size_state: Option<u32>,
+	db_backend: Option<String>,
 	db_compaction: Option<String>,
 	fat_db: Option<String>,
 	scale_verifiers: Option<bool>,
@@ -1833,6 +1838,7 @@ mod tests {
 			arg_cache_size_state: 25u32,
 			arg_cache_size: Some(128),
 			flag_fast_and_loose: false,
+			arg_db_backend: "rocksdb".into(),
 			arg_db_compaction: "ssd".into(),
 			arg_fat_db: "auto".into(),
 			flag_scale_verifiers: true,
