@@ -350,7 +350,7 @@ impl SyncSupplier {
 		let rlp = match io.chain().fast_warp_data(&state_root, &account_from, &storage_from) {
 			Ok(bytes) => {
 				let elapsed = start.elapsed();
-				println!("Generated Fast-Warp data: {}bytes in {}secs", bytes.len(), elapsed.as_secs());
+				debug!(target: "fast-warp", "Generated Fast-Warp data: {}b in {}s", bytes.len(), elapsed.as_secs());
 
 				let mut rlp = RlpStream::new();
 				rlp.append_raw(&bytes, 1);

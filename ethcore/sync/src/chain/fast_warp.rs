@@ -16,6 +16,7 @@
 use std::collections::{HashSet, HashMap};
 use std::iter::FromIterator;
 use std::path::PathBuf;
+use std::time::Instant;
 
 // use ethcore_blockchain::{BlockChainDB};
 // use block_sync::{BlockDownloader};
@@ -65,13 +66,15 @@ pub enum FastWarpRequest {
 /// State Downloader for the fast-warp protocol
 pub struct StateDownloader {
 	/// Hash of the next account to request
-	pub next_account_from: H256,
+	next_account_from: H256,
 	/// Key of the next state storage to request
-	pub next_storage_from: H256,
+	next_storage_from: H256,
 	/// Hash of the last account's address received
-	pub last_account_hash: H256,
+	last_account_hash: H256,
 	/// Key of the last storage key-value pair received
-	pub last_storage_key: H256,
+	last_storage_key: H256,
+	/// To compute ETA
+	started_at: Instant,
 }
 
 impl StateDownloader {
@@ -82,6 +85,7 @@ impl StateDownloader {
 			next_storage_from: H256::zero(),
 			last_account_hash: H256::zero(),
 			last_storage_key: H256::zero(),
+			started_at: Instant::now(),
 		}
 	}
 
@@ -195,12 +199,17 @@ impl StateDownloader {
 			return FastWarpAction::NextStep;
 		}
 
-		let progress = ((last_item.0[0] as u32 * 256 + last_item.0[1] as u32) * 100)  as f64 / (256 * 256) as f64;
+		let progress = (last_item.0[0] as u32 * 256 + last_item.0[1] as u32)  as f64 / (256 * 256) as f64;
+		let elapsed = self.started_at.elapsed();
+		let elapsed = elapsed.as_secs() as f64 + (elapsed.subsec_nanos() as f64) / 1_000_000_000.0;
+		let eta = (elapsed / progress) - elapsed;
 
-		println!(
-			"Got fast-warp data up to {:?}::{:?} ({} accounts) progress={}%",
-			last_item.0, last_item.1, num_accounts,
-			progress,
+		info!(
+			target: "fast-warp",
+			"Got fast-warp data up to {:?} ({} accounts) progress={}% ; eta={}s",
+			last_item.0, num_accounts,
+			(progress * 10_000.0).round() / 100.0,
+			eta.round() as u32,
 		);
 
 		{
@@ -215,7 +224,6 @@ impl StateDownloader {
 			}
 		}
 
-		println!("Current state root: {:?}", *state_root);
 		FastWarp::commit(db);
 		self.update(last_item.0, last_item.1, last_item.2);
 		FastWarpAction::Continue
@@ -388,7 +396,7 @@ impl TrieDownloader {
 							key_rlp.as_val().expect("Invalid Extension Key RLP")
 						},
 						proto => {
-							println!("Invalid Extension Key RLP: {:?}", proto);
+							warn!("Invalid Extension Key RLP: {:?}", proto);
 							continue;
 						},
 					};

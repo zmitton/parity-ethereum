@@ -1954,7 +1954,6 @@ impl BlockChainClient for Client {
 
 		let mut rlps = RlpStream::new();
 		let mut total_bytes = 0;
-		let mut total_accounts = 0;
 
 		let mut is_first = true;
 
@@ -2026,14 +2025,12 @@ impl BlockChainClient for Client {
 			account_rlp.complete_unbounded_list();
 
 			rlps.append_raw(&account_rlp.drain(), 1);
-			total_accounts += 1;
 
 			if total_bytes > MAX_SIZE {
 				break;
 			}
 		}
 
-		println!("Generated fast-warp data for {} accounts", total_accounts);
 		rlps.complete_unbounded_list();
 		Ok(rlps.drain())
 	}
