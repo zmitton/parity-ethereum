@@ -132,7 +132,7 @@ impl SyncRequester {
 		for h in &hashes {
 			rlp.append(&h.clone());
 		}
-		SyncRequester::send_request(sync, io, peer_id, PeerAsking::NodeData(hashes), GET_NODE_DATA_PACKET, rlp.out());
+		SyncRequester::send_request(sync, io, peer_id, PeerAsking::NodeData, GET_NODE_DATA_PACKET, rlp.out());
 	}
 
 	/// Request snapshot chunk from a peer.
@@ -146,8 +146,7 @@ impl SyncRequester {
 	/// Request fast-warp data from a peer
 	pub fn request_fast_warp_data(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, account_from: &H256, storage_from: &H256) {
 		trace!(target: "sync", "{} <- GetFastWarpData from {:?}::{:?}", peer_id, account_from, storage_from);
-		let mut rlp = RlpStream::new_list(3);
-		rlp.append(&sync.fast_warp.fw_target);
+		let mut rlp = RlpStream::new_list(2);
 		rlp.append(account_from);
 		rlp.append(storage_from);
 		SyncRequester::send_request(sync, io, peer_id, PeerAsking::FastWarpData, GET_FAST_WARP_DATA_PACKET, rlp.out());

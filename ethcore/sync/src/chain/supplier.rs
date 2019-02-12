@@ -340,12 +340,13 @@ impl SyncSupplier {
 
 	/// Respond to GetFastWarp request
 	fn return_fast_warp_data(io: &SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
-		let state_root: H256 = r.val_at(0)?;
-		let account_from: H256 = r.val_at(1)?;
-		let storage_from: H256 = r.val_at(2)?;
+		let account_from: H256 = r.val_at(0)?;
+		let storage_from: H256 = r.val_at(1)?;
 		trace!(target: "sync", "{} -> GetFastWarpData from {:?}::{:?}", peer_id, account_from, storage_from);
 
 		let start = ::std::time::Instant::now();
+		let best_block_header = io.chain().best_block_header();
+		let state_root = best_block_header.state_root();
 		let rlp = match io.chain().fast_warp_data(&state_root, &account_from, &storage_from) {
 			Ok(bytes) => {
 				let elapsed = start.elapsed();

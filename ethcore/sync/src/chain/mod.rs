@@ -118,7 +118,7 @@ use transactions_stats::{TransactionsStats, Stats as TransactionStats};
 use types::transaction::UnverifiedTransaction;
 use types::BlockNumber;
 
-use self::fast_warp::FastWarp;
+use self::fast_warp::{FastWarp, FastWarpRequest};
 use self::handler::SyncHandler;
 use self::propagator::SyncPropagator;
 use self::requester::SyncRequester;
@@ -219,12 +219,8 @@ pub enum SyncState {
 	Waiting,
 	/// Downloading blocks learned from `NewHashes` packet
 	NewBlocks,
-	/// Downloading fast-warp data
+	/// Syncing with fast-warp protocol
 	FastWarp,
-	/// Downloading fast-warp trie
-	FastWarpTrie,
-	/// Done Fast-Warping
-	FastWarpIdle,
 }
 
 /// Syncing status and statistics
@@ -299,7 +295,7 @@ pub enum PeerAsking {
 	SnapshotManifest,
 	SnapshotData,
 	FastWarpData,
-	NodeData(Vec<H256>),
+	NodeData,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -979,37 +975,16 @@ impl ChainSync {
 					self.maybe_start_snapshot_sync(io);
 				},
 				SyncState::FastWarp => {
-					if !self.fast_warp.finished() {
-						let (account_from, storage_from) = self.fast_warp.get_request();
-						SyncRequester::request_fast_warp_data(self, io, peer_id, &account_from, &storage_from);
-					} else {
-						// Now patch the fast-warp with missing Trie elmts
-						info!(target: "fast-warp", "Now filling the gaps!");
-						self.state = SyncState::FastWarpTrie;
+					if let Some(request) = self.fast_warp.request(peer_id) {
+						match request {
+							FastWarpRequest::NodeData(hashes) => {
+								SyncRequester::request_node_data(self, io, peer_id, hashes);
+							},
+							FastWarpRequest::FastWarpData(account_from, storage_from) => {
+								SyncRequester::request_fast_warp_data(self, io, peer_id, &account_from, &storage_from);
+							},
+						}
 					}
-				},
-				SyncState::FastWarpTrie => {
-					let mut node_data_hashes: Vec<H256> = self.fast_warp.node_data_queries
-						.iter()
-						.map(|h| h.clone())
-						.collect::<Vec<H256>>();
-
-					node_data_hashes.sort_unstable();
-					let n = ::std::cmp::min(20, node_data_hashes.len());
-					node_data_hashes = node_data_hashes[0..n].to_vec();
-
-					for node_data_hash in node_data_hashes.iter() {
-						self.fast_warp.node_data_queries.remove(node_data_hash);
-					}
-
-					if self.fast_warp.finished_trie() {
-						info!(target: "sync", "Done Fast Warp Trie!");
-						self.state = SyncState::FastWarpIdle;
-						return;
-					}
-
-					SyncRequester::request_node_data(self, io, peer_id, node_data_hashes);
-
 				},
 				SyncState::Idle | SyncState::Blocks | SyncState::NewBlocks => {
 					if io.chain().queue_info().is_full() {
@@ -1077,8 +1052,7 @@ impl ChainSync {
 				},
 				SyncState::SnapshotManifest | //already downloading from other peer
 					SyncState::Waiting |
-					SyncState::SnapshotWaiting |
-					SyncState::FastWarpIdle => ()
+					SyncState::SnapshotWaiting => ()
 			}
 		} else {
 			trace!(target: "sync", "Skipping peer {}, force={}, td={:?}, our td={}, state={:?}", peer_id, force, peer_difficulty, syncing_difficulty, self.state);
@@ -1220,7 +1194,7 @@ impl ChainSync {
 				PeerAsking::SnapshotManifest => elapsed > SNAPSHOT_MANIFEST_TIMEOUT,
 				PeerAsking::SnapshotData => elapsed > SNAPSHOT_DATA_TIMEOUT,
 				PeerAsking::FastWarpData => elapsed > FAST_WARP_DATA_TIMEOUT,
-				PeerAsking::NodeData(_) => elapsed > NODE_DATA_TIMEOUT,
+				PeerAsking::NodeData => elapsed > NODE_DATA_TIMEOUT,
 			};
 			if timeout {
 				debug!(target:"sync", "Timeout {}", peer_id);

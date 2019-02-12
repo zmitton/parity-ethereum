@@ -475,45 +475,6 @@ impl SyncHandler {
 		}
 	}
 
-	/// Called when NodeData is received from a peer
-	fn on_node_data(sync: &mut ChainSync, _io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
-		let mut peer_opt = sync.peers.get_mut(&peer_id);
-		let peer = match peer_opt {
-			None => {
-				debug!(target: "sync", "Received packet from unknown peer");
-				return Ok(());
-			},
-			Some(ref mut peer) => {
-				if !peer.can_sync() {
-					trace!(target: "sync", "Ignoring snapshot data from unconfirmed peer {}", peer_id);
-					return Ok(());
-				}
-				peer
-			},
-		};
-		peer.expired = false;
-		peer.block_set = None;
-
-		let node_data_hashes = match ::std::mem::replace(&mut peer.asking, PeerAsking::Nothing) {
-			PeerAsking::NodeData(hashes) => hashes,
-			_ => {
-				trace!(target: "sync", "{}: Ignored unexpected node-data", peer_id);
-				return Ok(());
-			},
-		};
-
-		if sync.state != SyncState::FastWarpTrie {
-			trace!(target: "sync", "{}: Ignored unexpected node-data", peer_id);
-			return Ok(());
-		}
-
-		let item_count = r.item_count().unwrap_or(0);
-		trace!(target: "sync", "{} -> NodeData ({} entries)", peer_id, item_count);
-
-		sync.fast_warp.process_node_data(node_data_hashes, r);
-		Ok(())
-	}
-
 	/// Called when snapshot manifest is downloaded from a peer.
 	fn on_snapshot_manifest(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
 		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
@@ -616,7 +577,27 @@ impl SyncHandler {
 			return Ok(());
 		}
 
-		sync.fast_warp.process_chunk(r);
+		trace!(target: "sync", "{} -> FastWarpData", peer_id);
+		sync.fast_warp.process(peer_id, r);
+		Ok(())
+	}
+
+	/// Called when NodeData is received from a peer
+	fn on_node_data(sync: &mut ChainSync, _io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
+		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
+			trace!(target: "sync", "Ignoring snapshot data from unconfirmed peer {}", peer_id);
+			return Ok(());
+		}
+		sync.clear_peer_download(peer_id);
+		if !sync.reset_peer_asking(peer_id, PeerAsking::NodeData) || sync.state != SyncState::FastWarp {
+			trace!(target: "sync", "{}: Ignored unexpected fast-warp data", peer_id);
+			return Ok(());
+		}
+
+		let item_count = r.item_count().unwrap_or(0);
+		trace!(target: "sync", "{} -> NodeData ({} entries)", peer_id, item_count);
+
+		sync.fast_warp.process(peer_id, r);
 		Ok(())
 	}
 
