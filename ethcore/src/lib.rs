@@ -112,8 +112,8 @@ extern crate ethcore_accounts as accounts;
 extern crate ethcore_stratum;
 #[cfg(any(test, feature = "tempdir"))]
 extern crate tempdir;
-#[cfg(any(test, feature = "kvdb-rocksdb"))]
-extern crate kvdb_rocksdb;
+#[cfg(any(test, feature = "kvdb-lmdb"))]
+extern crate kvdb_lmdb;
 #[cfg(any(test, feature = "blooms-db"))]
 extern crate blooms_db;
 #[cfg(any(test, feature = "env_logger"))]

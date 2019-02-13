@@ -22,7 +22,7 @@ use std::thread;
 use ansi_term::Colour;
 use bytes::Bytes;
 use call_contract::CallContract;
-use ethcore::client::{BlockId, Client, Mode, DatabaseCompactionProfile, VMType, BlockChainClient, BlockInfo};
+use ethcore::client::{BlockId, Client, Mode, VMType, BlockChainClient, BlockInfo};
 use ethcore::miner::{self, stratum, Miner, MinerService, MinerOptions};
 use ethcore::snapshot::{self, SnapshotConfiguration};
 use ethcore::spec::{SpecParams, OptimizeFor};
@@ -109,7 +109,6 @@ pub struct RunCmd {
 	pub mode: Option<Mode>,
 	pub tracing: Switch,
 	pub fat_db: Switch,
-	pub compaction: DatabaseCompactionProfile,
 	pub vm_type: VMType,
 	pub geth_compatibility: bool,
 	pub experimental_rpcs: bool,
@@ -189,7 +188,7 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	let algorithm = cmd.pruning.to_algorithm(&user_defaults);
 
 	// execute upgrades
-	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.compaction)?;
+	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm)?;
 
 	// create dirs used by parity
 	cmd.dirs.create_dirs(cmd.acc_conf.unlocked_accounts.len() == 0, cmd.secretstore_conf.enabled)?;
@@ -250,8 +249,9 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	};
 
 	// initialize database.
-	let db = db::open_db(&db_dirs.client_path(algorithm).to_str().expect("DB path could not be converted to string."),
-						 &cmd.db_backend).map_err(|e| format!("Failed to open database {:?}", e))?;
+	let db = db::open_db(
+		&db_dirs.client_path(algorithm).to_str().expect("DB path could not be converted to string."),
+	).map_err(|e| format!("Failed to open database {:?}", e))?;
 
 	let service = light_client::Service::start(config, &spec, fetch, db, cache.clone())
 		.map_err(|e| format!("Error starting light client: {}", e))?;
@@ -418,7 +418,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	let snapshot_path = db_dirs.snapshot_path();
 
 	// execute upgrades
-	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.compaction)?;
+	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm)?;
 
 	// create dirs used by parity
 	cmd.dirs.create_dirs(cmd.acc_conf.unlocked_accounts.len() == 0, cmd.secretstore_conf.enabled)?;
@@ -531,7 +531,6 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		mode.clone(),
 		tracing,
 		fat_db,
-		cmd.compaction,
 		cmd.vm_type,
 		cmd.name,
 		algorithm,
@@ -554,7 +553,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	// set network path.
 	net_conf.net_config_path = Some(db_dirs.network_path().to_string_lossy().into_owned());
 
-	let restoration_db_handler = db::restoration_db_handler(&client_path, &client_config);
+	let restoration_db_handler = db::restoration_db_handler();
 	let client_db = restoration_db_handler.open(&client_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 

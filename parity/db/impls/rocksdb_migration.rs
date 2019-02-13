@@ -188,9 +188,7 @@ fn exists(path: &Path) -> bool {
 }
 
 /// Migrates the database.
-pub fn migrate(path: &Path, compaction_profile: &DatabaseCompactionProfile) -> Result<(), Error> {
-	let compaction_profile = helpers::compaction_profile(&compaction_profile, path);
-
+pub fn migrate(path: &Path) -> Result<(), Error> {
 	// read version file.
 	let version = current_version(path)?;
 
@@ -210,7 +208,6 @@ pub fn migrate(path: &Path, compaction_profile: &DatabaseCompactionProfile) -> R
 	// Further migrations
 	if version < CURRENT_VERSION && exists(&db_path) {
 		println!("Migrating database from version {} to {}", version, CURRENT_VERSION);
-		migrate_database(version, &db_path, consolidated_database_migrations(&compaction_profile)?)?;
 
 		if version < BLOOMS_DB_VERSION {
 			println!("Migrating blooms to blooms-db...");

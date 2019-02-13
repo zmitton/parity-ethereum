@@ -24,7 +24,7 @@ use hash::keccak;
 use ethcore::snapshot::{Progress, RestorationStatus, SnapshotConfiguration, SnapshotService as SS};
 use ethcore::snapshot::io::{SnapshotReader, PackedReader, PackedWriter};
 use ethcore::snapshot::service::Service as SnapshotService;
-use ethcore::client::{Mode, DatabaseCompactionProfile, VMType};
+use ethcore::client::{Mode, VMType};
 use ethcore::miner::Miner;
 use ethcore_service::ClientService;
 use types::ids::BlockId;
@@ -57,7 +57,6 @@ pub struct SnapshotCommand {
 	pub pruning_memory: usize,
 	pub tracing: Switch,
 	pub fat_db: Switch,
-	pub compaction: DatabaseCompactionProfile,
 	pub file_path: Option<String>,
 	pub kind: Kind,
 	pub block_at: BlockId,
@@ -163,7 +162,7 @@ impl SnapshotCommand {
 		let snapshot_path = db_dirs.snapshot_path();
 
 		// execute upgrades
-		execute_upgrades(&self.dirs.base, &db_dirs, algorithm, &self.compaction)?;
+		execute_upgrades(&self.dirs.base, &db_dirs, algorithm)?;
 
 		// prepare client config
 		let mut client_config = to_client_config(
@@ -172,7 +171,6 @@ impl SnapshotCommand {
 			Mode::Active,
 			tracing,
 			fat_db,
-			self.compaction,
 			VMType::default(),
 			"".into(),
 			algorithm,
@@ -184,7 +182,7 @@ impl SnapshotCommand {
 
 		client_config.snapshot = self.snapshot_conf;
 
-		let restoration_db_handler = db::restoration_db_handler(&client_path, &client_config);
+		let restoration_db_handler = db::restoration_db_handler();
 		let client_db = restoration_db_handler.open(&client_path)
 			.map_err(|e| format!("Failed to open database {:?}", e))?;
 

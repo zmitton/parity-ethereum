@@ -29,7 +29,7 @@ use evm::Factory as EvmFactory;
 use hash::keccak;
 use io::IoChannel;
 use kvdb::KeyValueDB;
-use kvdb_rocksdb::{self, Database, DatabaseConfig};
+use kvdb_lmdb::Database;
 use parking_lot::RwLock;
 use rlp::{self, RlpStream};
 use tempdir::TempDir;
@@ -306,8 +306,7 @@ pub fn new_temp_db(tempdir: &Path) -> Arc<BlockChainDB> {
 	let trace_blooms_dir = TempDir::new("").unwrap();
 	let key_value_dir = tempdir.join("key_value");
 
-	let db_config = DatabaseConfig::with_columns(::db::NUM_COLUMNS);
-	let key_value_db = Database::open(&db_config, key_value_dir.to_str().unwrap()).unwrap();
+	let key_value_db = Database::open(key_value_dir.to_str().unwrap(), ::db::NUM_COLUMNS.unwrap()).unwrap();
 
 	let db = TestBlockChainDB {
 		blooms: blooms_db::Database::open(blooms_dir.path()).unwrap(),
@@ -321,10 +320,8 @@ pub fn new_temp_db(tempdir: &Path) -> Arc<BlockChainDB> {
 }
 
 /// Creates new instance of KeyValueDBHandler
-pub fn restoration_db_handler(config: kvdb_rocksdb::DatabaseConfig) -> Box<BlockChainDBHandler> {
-	struct RestorationDBHandler {
-		config: kvdb_rocksdb::DatabaseConfig,
-	}
+pub fn restoration_db_handler() -> Box<BlockChainDBHandler> {
+	struct RestorationDBHandler {}
 
 	struct RestorationDB {
 		blooms: blooms_db::Database,
@@ -348,7 +345,7 @@ pub fn restoration_db_handler(config: kvdb_rocksdb::DatabaseConfig) -> Box<Block
 
 	impl BlockChainDBHandler for RestorationDBHandler {
 		fn open(&self, db_path: &Path) -> io::Result<Arc<BlockChainDB>> {
-			let key_value = Arc::new(kvdb_rocksdb::Database::open(&self.config, &db_path.to_string_lossy())?);
+			let key_value = Arc::new(Database::open(&db_path.to_string_lossy(), ::db::NUM_COLUMNS.unwrap())?);
 			let blooms_path = db_path.join("blooms");
 			let trace_blooms_path = db_path.join("trace_blooms");
 			fs::create_dir_all(&blooms_path)?;
@@ -364,7 +361,7 @@ pub fn restoration_db_handler(config: kvdb_rocksdb::DatabaseConfig) -> Box<Block
 		}
 	}
 
-	Box::new(RestorationDBHandler { config })
+	Box::new(RestorationDBHandler { })
 }
 
 /// Generates dummy blockchain with corresponding amount of blocks

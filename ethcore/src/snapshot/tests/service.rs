@@ -31,7 +31,6 @@ use test_helpers::{new_db, new_temp_db, generate_dummy_client_with_spec_and_data
 
 use parking_lot::Mutex;
 use io::IoChannel;
-use kvdb_rocksdb::DatabaseConfig;
 use verification::queue::kind::blocks::Unverified;
 
 #[test]
@@ -48,8 +47,7 @@ fn restored_is_equivalent() {
 	let client_db = tempdir.path().join("client_db");
 	let path = tempdir.path().join("snapshot");
 
-	let db_config = DatabaseConfig::with_columns(::db::NUM_COLUMNS);
-	let restoration = restoration_db_handler(db_config);
+	let restoration = restoration_db_handler();
 	let blockchain_db = restoration.open(&client_db).unwrap();
 
 	let spec = Spec::new_null();
@@ -113,7 +111,7 @@ fn guards_delete_folders() {
 	let service_params = ServiceParams {
 		engine: spec.engine.clone(),
 		genesis_block: spec.genesis_block(),
-		restoration_db_handler: restoration_db_handler(DatabaseConfig::with_columns(::db::NUM_COLUMNS)),
+		restoration_db_handler: restoration_db_handler(),
 		pruning: ::journaldb::Algorithm::Archive,
 		channel: IoChannel::disconnected(),
 		snapshot_root: tempdir.path().to_owned(),
@@ -203,7 +201,6 @@ fn keep_ancient_blocks() {
 	writer.into_inner().finish(manifest.clone()).unwrap();
 
 	// Initialize the Client
-	let db_config = DatabaseConfig::with_columns(::db::NUM_COLUMNS);
 	let client_db = new_temp_db(&tempdir.path());
 	let client2 = Client::new(
 		ClientConfig::default(),
@@ -228,7 +225,7 @@ fn keep_ancient_blocks() {
 	let service_params = ServiceParams {
 		engine: spec.engine.clone(),
 		genesis_block: spec.genesis_block(),
-		restoration_db_handler: restoration_db_handler(db_config),
+		restoration_db_handler: restoration_db_handler(),
 		pruning: ::journaldb::Algorithm::Archive,
 		channel: IoChannel::disconnected(),
 		snapshot_root: tempdir.path().to_owned(),
@@ -278,7 +275,6 @@ fn recover_aborted_recovery() {
 
 	let spec = Spec::new_null();
 	let tempdir = TempDir::new("").unwrap();
-	let db_config = DatabaseConfig::with_columns(::db::NUM_COLUMNS);
 	let client_db = new_db();
 	let client2 = Client::new(
 		Default::default(),
@@ -290,7 +286,7 @@ fn recover_aborted_recovery() {
 	let service_params = ServiceParams {
 		engine: spec.engine.clone(),
 		genesis_block: spec.genesis_block(),
-		restoration_db_handler: restoration_db_handler(db_config),
+		restoration_db_handler: restoration_db_handler(),
 		pruning: ::journaldb::Algorithm::Archive,
 		channel: IoChannel::disconnected(),
 		snapshot_root: tempdir.path().to_owned(),

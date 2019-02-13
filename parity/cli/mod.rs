@@ -891,14 +891,6 @@ usage! {
 			"--cache-size-state=[MB]",
 			"Specify the maximum size of memory to use for the state cache.",
 
-			ARG arg_db_backend: (String) = "rocksdb", or |c: &Config| c.footprint.as_ref()?.db_backend.clone(),
-			"--db-backend=[DB]",
-			"Which database to use. DB may be one of: rocksdb or lmdb.",
-
-			ARG arg_db_compaction: (String) = "auto", or |c: &Config| c.footprint.as_ref()?.db_compaction.clone(),
-			"--db-compaction=[TYPE]",
-			"Database compaction type. TYPE may be one of: ssd - suitable for SSDs and fast HDDs; hdd - suitable for slow HDDs; auto - determine automatically.",
-
 			ARG arg_fat_db: (String) = "auto", or |c: &Config| c.footprint.as_ref()?.fat_db.clone(),
 			"--fat-db=[BOOL]",
 			"Build appropriate information to allow enumeration of all accounts and storage keys. Doubles the size of the state database. BOOL may be one of on, off or auto.",
@@ -1137,6 +1129,12 @@ usage! {
 			ARG arg_ntp_servers: (Option<String>) = None, or |_| None,
 			"--ntp-servers=[HOSTS]",
 			"Does nothing; checking if clock is sync with NTP servers is now done on the UI.",
+
+			// ARG removed in 2.5.
+
+			ARG arg_db_compaction: (Option<String>) = None, or |c: &Config| c.footprint.as_ref()?._legacy_db_compaction.clone(),
+			"--db-compaction=[TYPE]",
+			"Does nothing; database backend was changed to lmdb, which doesn't support compaction.",
 	}
 }
 
@@ -1401,11 +1399,12 @@ struct Footprint {
 	cache_size_blocks: Option<u32>,
 	cache_size_queue: Option<u32>,
 	cache_size_state: Option<u32>,
-	db_backend: Option<String>,
-	db_compaction: Option<String>,
 	fat_db: Option<String>,
 	scale_verifiers: Option<bool>,
-	num_verifiers: Option<usize>,
+	num_verifiers: Option<usize>,	
+	#[serde(rename = "db_compaction")]
+	_legacy_db_compaction: Option<String>,
+
 }
 
 #[derive(Default, Debug, PartialEq, Deserialize)]
@@ -1838,8 +1837,6 @@ mod tests {
 			arg_cache_size_state: 25u32,
 			arg_cache_size: Some(128),
 			flag_fast_and_loose: false,
-			arg_db_backend: "rocksdb".into(),
-			arg_db_compaction: "ssd".into(),
 			arg_fat_db: "auto".into(),
 			flag_scale_verifiers: true,
 			arg_num_verifiers: Some(6),
@@ -1898,6 +1895,7 @@ mod tests {
 			arg_etherbase: None,
 			arg_extradata: None,
 			arg_cache: None,
+			arg_db_compaction: None,
 			// Legacy-Dapps
 			arg_dapps_port: Some(8080),
 			arg_dapps_interface: Some("local".into()),
@@ -2113,10 +2111,10 @@ mod tests {
 				cache_size_blocks: Some(16),
 				cache_size_queue: Some(100),
 				cache_size_state: Some(25),
-				db_compaction: Some("ssd".into()),
 				fat_db: Some("off".into()),
 				scale_verifiers: Some(false),
 				num_verifiers: None,
+				_legacy_db_compaction: None,
 			}),
 			light: Some(Light {
 				on_demand_response_time_window: Some(2),

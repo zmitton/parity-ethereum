@@ -26,8 +26,7 @@ use ethereum_types::{U256, H256, Address};
 use bytes::ToPretty;
 use rlp::PayloadInfo;
 use ethcore::client::{
-	Mode, DatabaseCompactionProfile, VMType, Nonce, Balance, BlockChainClient, BlockId, BlockInfo, ImportBlock, BlockChainReset, 
-	DatabaseBackend,
+	Mode, VMType, Nonce, Balance, BlockChainClient, BlockId, BlockInfo, ImportBlock, BlockChainReset, 
 };
 use ethcore::error::{ImportErrorKind, ErrorKind as EthcoreErrorKind, Error as EthcoreError};
 use ethcore::miner::Miner;
@@ -86,7 +85,6 @@ pub struct ResetBlockchain {
 	pub pruning_memory: usize,
 	pub tracing: Switch,
 	pub fat_db: Switch,
-	pub db_backend: DatabaseBackend,
 	pub cache_config: CacheConfig,
 	pub num: u32,
 }
@@ -108,7 +106,6 @@ pub struct ImportBlockchain {
 	pub pruning: Pruning,
 	pub pruning_history: u64,
 	pub pruning_memory: usize,
-	pub db_backend: DatabaseBackend,
 	pub tracing: Switch,
 	pub fat_db: Switch,
 	pub vm_type: VMType,
@@ -129,7 +126,6 @@ pub struct ExportBlockchain {
 	pub pruning: Pruning,
 	pub pruning_history: u64,
 	pub pruning_memory: usize,
-	pub db_backend: DatabaseBackend,
 	pub fat_db: Switch,
 	pub tracing: Switch,
 	pub from_block: BlockId,
@@ -148,7 +144,6 @@ pub struct ExportState {
 	pub pruning: Pruning,
 	pub pruning_history: u64,
 	pub pruning_memory: usize,
-	pub db_backend: DatabaseBackend,
 	pub fat_db: Switch,
 	pub tracing: Switch,
 	pub at: BlockId,
@@ -204,7 +199,7 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	let client_path = db_dirs.client_path(algorithm);
 
 	// execute upgrades
-	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.db_backend)?;
+	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm)?;
 
 	// create dirs used by parity
 	cmd.dirs.create_dirs(false, false)?;
@@ -225,8 +220,9 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	config.queue.verifier_settings = cmd.verifier_settings;
 
 	// initialize database.
-	let db = db::open_db(&client_path.to_str().expect("DB path could not be converted to string."),
-						 &cmd.db_backend).map_err(|e| format!("Failed to open database: {:?}", e))?;
+	let db = db::open_db(
+		&client_path.to_str().expect("DB path could not be converted to string."),
+	).map_err(|e| format!("Failed to open database: {:?}", e))?;
 
 	// TODO: could epoch signals be avilable at the end of the file?
 	let fetch = ::light::client::fetch::unavailable();
@@ -356,7 +352,7 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 	let snapshot_path = db_dirs.snapshot_path();
 
 	// execute upgrades
-	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.db_backend)?;
+	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm)?;
 
 	// create dirs used by parity
 	cmd.dirs.create_dirs(false, false)?;
@@ -368,7 +364,6 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 		Mode::Active,
 		tracing,
 		fat_db,
-		cmd.db_backend,
 		cmd.vm_type,
 		"".into(),
 		algorithm,
@@ -380,7 +375,7 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 
 	client_config.queue.verifier_settings = cmd.verifier_settings;
 
-	let restoration_db_handler = db::restoration_db_handler(&client_path, &client_config);
+	let restoration_db_handler = db::restoration_db_handler();
 	let client_db = restoration_db_handler.open(&client_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
@@ -513,7 +508,6 @@ fn start_client(
 	pruning_memory: usize,
 	tracing: Switch,
 	fat_db: Switch,
-	db_backend: DatabaseBackend,
 	cache_config: CacheConfig,
 	require_fat_db: bool,
 	max_round_blocks_to_import: usize,
@@ -551,7 +545,7 @@ fn start_client(
 	let snapshot_path = db_dirs.snapshot_path();
 
 	// execute upgrades
-	execute_upgrades(&dirs.base, &db_dirs, algorithm, &db_backend)?;
+	execute_upgrades(&dirs.base, &db_dirs, algorithm)?;
 
 	// create dirs used by parity
 	dirs.create_dirs(false, false)?;
@@ -563,7 +557,6 @@ fn start_client(
 		Mode::Active,
 		tracing,
 		fat_db,
-		db_backend,
 		VMType::default(),
 		"".into(),
 		algorithm,
@@ -573,7 +566,7 @@ fn start_client(
 		max_round_blocks_to_import,
 	);
 
-	let restoration_db_handler = db::restoration_db_handler(&client_path, &client_config);
+	let restoration_db_handler = db::restoration_db_handler();
 	let client_db = restoration_db_handler.open(&client_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
@@ -606,7 +599,6 @@ fn execute_export(cmd: ExportBlockchain) -> Result<(), String> {
 		cmd.pruning_memory,
 		cmd.tracing,
 		cmd.fat_db,
-		cmd.db_backend,
 		cmd.cache_config,
 		false,
 		cmd.max_round_blocks_to_import,
@@ -651,7 +643,6 @@ fn execute_export_state(cmd: ExportState) -> Result<(), String> {
 		cmd.pruning_memory,
 		cmd.tracing,
 		cmd.fat_db,
-		cmd.db_backend,
 		cmd.cache_config,
 		true,
 		cmd.max_round_blocks_to_import,
@@ -738,7 +729,6 @@ fn execute_reset(cmd: ResetBlockchain) -> Result<(), String> {
 		cmd.pruning_memory,
 		cmd.tracing,
 		cmd.fat_db,
-		cmd.db_backend,
 		cmd.cache_config,
 		false,
 		0,

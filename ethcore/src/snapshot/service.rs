@@ -881,7 +881,7 @@ mod tests {
 		let snapshot_params = ServiceParams {
 			engine: spec.engine.clone(),
 			genesis_block: spec.genesis_block(),
-			restoration_db_handler: restoration_db_handler(Default::default()),
+			restoration_db_handler: restoration_db_handler(),
 			pruning: Algorithm::Archive,
 			channel: service.channel(),
 			snapshot_root: dir,
@@ -912,14 +912,12 @@ mod tests {
 	#[test]
 	fn cannot_finish_with_invalid_chunks() {
 		use ethereum_types::H256;
-		use kvdb_rocksdb::DatabaseConfig;
 
 		let spec = Spec::new_test();
 		let tempdir = TempDir::new("").unwrap();
 
 		let state_hashes: Vec<_> = (0..5).map(|_| H256::random()).collect();
 		let block_hashes: Vec<_> = (0..5).map(|_| H256::random()).collect();
-		let db_config = DatabaseConfig::with_columns(::db::NUM_COLUMNS);
 		let gb = spec.genesis_block();
 		let flag = ::std::sync::atomic::AtomicBool::new(true);
 
@@ -933,7 +931,7 @@ mod tests {
 				block_hash: H256::default(),
 			},
 			pruning: Algorithm::Archive,
-			db: restoration_db_handler(db_config).open(&tempdir.path().to_owned()).unwrap(),
+			db: restoration_db_handler().open(&tempdir.path().to_owned()).unwrap(),
 			writer: None,
 			genesis: &gb,
 			guard: Guard::benign(),
