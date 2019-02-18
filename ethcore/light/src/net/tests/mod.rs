@@ -118,29 +118,29 @@ impl Provider for TestProvider {
 		self.0.client.block_header(id)
 	}
 
-	fn transaction_index(&self, req: request::CompleteTransactionIndexRequest)
-		-> Option<request::TransactionIndexResponse>
+	fn transaction_index(&self, req: request::transaction_index::CompleteTransactionIndexRequest)
+						 -> Option<request::transaction_index::TransactionIndexResponse>
 	{
-		Some(request::TransactionIndexResponse {
+		Some(request::transaction_index::TransactionIndexResponse {
 			num: 100,
 			hash: req.hash,
 			index: 55,
 		})
 	}
 
-	fn block_body(&self, req: request::CompleteBodyRequest) -> Option<request::BodyResponse> {
+	fn block_body(&self, req: request::block_body::CompleteBodyRequest) -> Option<request::block_body::BodyResponse> {
 		self.0.client.block_body(req)
 	}
 
-	fn block_receipts(&self, req: request::CompleteReceiptsRequest) -> Option<request::ReceiptsResponse> {
+	fn block_receipts(&self, req: request::block_receipts::CompleteReceiptsRequest) -> Option<request::block_receipts::ReceiptsResponse> {
 		self.0.client.block_receipts(req)
 	}
 
-	fn account_proof(&self, req: request::CompleteAccountRequest) -> Option<request::AccountResponse> {
+	fn account_proof(&self, req: request::account::CompleteAccountRequest) -> Option<request::account::AccountResponse> {
 		// sort of a leaf node
 		let mut stream = RlpStream::new_list(2);
 		stream.append(&req.address_hash).append_empty_data();
-		Some(AccountResponse {
+		Some(account::AccountResponse {
 			proof: vec![stream.out()],
 			balance: 10.into(),
 			nonce: 100.into(),
@@ -149,29 +149,29 @@ impl Provider for TestProvider {
 		})
 	}
 
-	fn storage_proof(&self, req: request::CompleteStorageRequest) -> Option<request::StorageResponse> {
-		Some(StorageResponse {
+	fn storage_proof(&self, req: request::storage::CompleteStorageRequest) -> Option<request::storage::StorageResponse> {
+		Some(storage::StorageResponse {
 			proof: vec![::rlp::encode(&req.key_hash)],
 			value: req.key_hash | req.address_hash,
 		})
 	}
 
-	fn contract_code(&self, req: request::CompleteCodeRequest) -> Option<request::CodeResponse> {
-		Some(CodeResponse {
+	fn contract_code(&self, req: request::contract_code::CompleteCodeRequest) -> Option<request::contract_code::CodeResponse> {
+		Some(contract_code::CodeResponse {
 			code: req.block_hash.iter().chain(req.code_hash.iter()).cloned().collect(),
 		})
 	}
 
-	fn header_proof(&self, _req: request::CompleteHeaderProofRequest) -> Option<request::HeaderProofResponse> {
+	fn header_proof(&self, _req: request::header_proof::CompleteHeaderProofRequest) -> Option<request::header_proof::HeaderProofResponse> {
 		None
 	}
 
-	fn transaction_proof(&self, _req: request::CompleteExecutionRequest) -> Option<request::ExecutionResponse> {
+	fn transaction_proof(&self, _req: request::execution::CompleteExecutionRequest) -> Option<request::execution::ExecutionResponse> {
 		None
 	}
 
-	fn epoch_signal(&self, _req: request::CompleteSignalRequest) -> Option<request::SignalResponse> {
-		Some(request::SignalResponse {
+	fn epoch_signal(&self, _req: request::epoch_signal::CompleteSignalRequest) -> Option<request::epoch_signal::SignalResponse> {
+		Some(request::epoch_signal::SignalResponse {
 			signal: vec![1, 2, 3, 4],
 		})
 	}
@@ -287,7 +287,7 @@ fn credit_overflow() {
 	}
 
 	// 1 billion requests is far too many for the default flow params.
-	let requests = encode_single(Request::Headers(IncompleteHeadersRequest {
+	let requests = encode_single(Request::Headers(header::IncompleteHeadersRequest {
 		start: HashOrNumber::Number(1).into(),
 		max: 1_000_000_000,
 		skip: 0,
@@ -321,7 +321,7 @@ fn get_block_headers() {
 		proto.handle_packet(&Expect::Nothing, 1, packet::STATUS, &my_status);
 	}
 
-	let request = Request::Headers(IncompleteHeadersRequest {
+	let request = Request::Headers(header::IncompleteHeadersRequest {
 		start: HashOrNumber::Number(1).into(),
 		max: 10,
 		skip: 0,
@@ -339,7 +339,7 @@ fn get_block_headers() {
 
 		let new_creds = *flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
 
-		let response = vec![Response::Headers(HeadersResponse { headers })];
+		let response = vec![Response::Headers(header::HeadersResponse { headers })];
 
 		let mut stream = RlpStream::new_list(3);
 		stream.append(&req_id).append(&new_creds).append_list(&response);
@@ -376,10 +376,10 @@ fn get_block_bodies() {
 
 	for i in 0..10 {
 		let hash = provider.client.block_header(BlockId::Number(i)).unwrap().hash();
-		builder.push(Request::Body(IncompleteBodyRequest {
+		builder.push(Request::Body(block_body::IncompleteBodyRequest {
 			hash: hash.into(),
 		})).unwrap();
-		bodies.push(Response::Body(provider.client.block_body(CompleteBodyRequest {
+		bodies.push(Response::Body(provider.client.block_body(block_body::CompleteBodyRequest {
 			hash: hash,
 		}).unwrap()));
 	}
@@ -430,8 +430,8 @@ fn get_block_receipts() {
 	let mut builder = Builder::default();
 	let mut receipts = Vec::new();
 	for hash in block_hashes.iter().cloned() {
-		builder.push(Request::Receipts(IncompleteReceiptsRequest { hash: hash.into() })).unwrap();
-		receipts.push(Response::Receipts(provider.client.block_receipts(CompleteReceiptsRequest {
+		builder.push(Request::Receipts(block_receipts::IncompleteReceiptsRequest { hash: hash.into() })).unwrap();
+		receipts.push(Response::Receipts(provider.client.block_receipts(block_receipts::CompleteReceiptsRequest {
 			hash: hash
 		}).unwrap()));
 	}
@@ -476,11 +476,11 @@ fn get_state_proofs() {
 	let key2: H256 = U256::from(99988887).into();
 
 	let mut builder = Builder::default();
-	builder.push(Request::Account(IncompleteAccountRequest {
+	builder.push(Request::Account(account::IncompleteAccountRequest {
 		block_hash: H256::default().into(),
 		address_hash: key1.into(),
 	})).unwrap();
-	builder.push(Request::Storage(IncompleteStorageRequest {
+	builder.push(Request::Storage(storage::IncompleteStorageRequest {
 		block_hash: H256::default().into(),
 		address_hash: key1.into(),
 		key_hash: key2.into(),
@@ -491,11 +491,11 @@ fn get_state_proofs() {
 	let request_body = make_packet(req_id, &requests);
 	let response = {
 		let responses = vec![
-			Response::Account(provider.account_proof(CompleteAccountRequest {
+			Response::Account(provider.account_proof(account::CompleteAccountRequest {
 				block_hash: H256::default(),
 				address_hash: key1,
 			}).unwrap()),
-			Response::Storage(provider.storage_proof(CompleteStorageRequest {
+			Response::Storage(provider.storage_proof(storage::CompleteStorageRequest {
 				block_hash: H256::default(),
 				address_hash: key1,
 				key_hash: key2,
@@ -532,7 +532,7 @@ fn get_contract_code() {
 	let key1: H256 = U256::from(11223344).into();
 	let key2: H256 = U256::from(99988887).into();
 
-	let request = Request::Code(IncompleteCodeRequest {
+	let request = Request::Code(contract_code::IncompleteCodeRequest {
 		block_hash: key1.into(),
 		code_hash: key2.into(),
 	});
@@ -540,7 +540,7 @@ fn get_contract_code() {
 	let requests = encode_single(request.clone());
 	let request_body = make_packet(req_id, &requests);
 	let response = {
-		let response = vec![Response::Code(CodeResponse {
+		let response = vec![Response::Code(contract_code::CodeResponse {
 			code: key1.iter().chain(key2.iter()).cloned().collect(),
 		})];
 
@@ -572,7 +572,7 @@ fn epoch_signal() {
 	}
 
 	let req_id = 112;
-	let request = Request::Signal(request::IncompleteSignalRequest {
+	let request = Request::Signal(request::epoch_signal::IncompleteSignalRequest {
 		block_hash: H256([1; 32]).into(),
 	});
 
@@ -580,7 +580,7 @@ fn epoch_signal() {
 	let request_body = make_packet(req_id, &requests);
 
 	let response = {
-		let response = vec![Response::Signal(SignalResponse {
+		let response = vec![Response::Signal(epoch_signal::SignalResponse {
 			signal: vec![1, 2, 3, 4],
 		})];
 
@@ -615,7 +615,7 @@ fn proof_of_execution() {
 	}
 
 	let req_id = 112;
-	let mut request = Request::Execution(request::IncompleteExecutionRequest {
+	let mut request = Request::Execution(request::execution::IncompleteExecutionRequest {
 		block_hash: H256::default().into(),
 		from: Address::default(),
 		action: Action::Call(Address::default()),
@@ -669,7 +669,7 @@ fn id_guard() {
 	let req_id_1 = ReqId(5143);
 	let req_id_2 = ReqId(1111);
 
-	let req = encode_single(Request::Headers(IncompleteHeadersRequest {
+	let req = encode_single(Request::Headers(header::IncompleteHeadersRequest {
 		start: HashOrNumber::Number(5u64).into(),
 		max: 100,
 		skip: 0,
@@ -757,14 +757,14 @@ fn get_transaction_index() {
 	let req_id = 112;
 	let key1: H256 = U256::from(11223344).into();
 
-	let request = Request::TransactionIndex(IncompleteTransactionIndexRequest {
+	let request = Request::TransactionIndex(transaction_index::IncompleteTransactionIndexRequest {
 		hash: key1.into(),
 	});
 
 	let requests = encode_single(request.clone());
 	let request_body = make_packet(req_id, &requests);
 	let response = {
-		let response = vec![Response::TransactionIndex(TransactionIndexResponse {
+		let response = vec![Response::TransactionIndex(transaction_index::TransactionIndexResponse {
 			num: 100,
 			hash: key1,
 			index: 55,

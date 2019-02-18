@@ -55,7 +55,7 @@ pub trait Provider: Send + Sync {
 	///
 	/// The returned vector may have any length in the range [0, `max`], but the
 	/// results within must adhere to the `skip` and `reverse` parameters.
-	fn block_headers(&self, req: request::CompleteHeadersRequest) -> Option<request::HeadersResponse> {
+	fn block_headers(&self, req: request::header::CompleteHeadersRequest) -> Option<request::header::HeadersResponse> {
 		use request::HashOrNumber;
 
 		if req.max == 0 { return None }
@@ -75,7 +75,7 @@ pub trait Provider: Send + Sync {
 
 					if req.max == 1 || canon_hash != Some(hash) {
 						// Non-canonical header or single header requested.
-						return Some(::request::HeadersResponse {
+						return Some(::request::header::HeadersResponse {
 							headers: vec![header],
 						})
 					}
@@ -99,7 +99,7 @@ pub trait Provider: Send + Sync {
 		if headers.is_empty() {
 			None
 		} else {
-			Some(::request::HeadersResponse { headers })
+			Some(::request::header::HeadersResponse { headers })
 		}
 	}
 
@@ -107,37 +107,37 @@ pub trait Provider: Send + Sync {
 	fn block_header(&self, id: BlockId) -> Option<encoded::Header>;
 
 	/// Get a transaction index by hash.
-	fn transaction_index(&self, req: request::CompleteTransactionIndexRequest)
-		-> Option<request::TransactionIndexResponse>;
+	fn transaction_index(&self, req: request::transaction_index::CompleteTransactionIndexRequest)
+						 -> Option<request::transaction_index::TransactionIndexResponse>;
 
 	/// Fulfill a block body request.
-	fn block_body(&self, req: request::CompleteBodyRequest) -> Option<request::BodyResponse>;
+	fn block_body(&self, req: request::block_body::CompleteBodyRequest) -> Option<request::block_body::BodyResponse>;
 
 	/// Fulfill a request for block receipts.
-	fn block_receipts(&self, req: request::CompleteReceiptsRequest) -> Option<request::ReceiptsResponse>;
+	fn block_receipts(&self, req: request::block_receipts::CompleteReceiptsRequest) -> Option<request::block_receipts::ReceiptsResponse>;
 
 	/// Get an account proof.
-	fn account_proof(&self, req: request::CompleteAccountRequest) -> Option<request::AccountResponse>;
+	fn account_proof(&self, req: request::account::CompleteAccountRequest) -> Option<request::account::AccountResponse>;
 
 	/// Get a storage proof.
-	fn storage_proof(&self, req: request::CompleteStorageRequest) -> Option<request::StorageResponse>;
+	fn storage_proof(&self, req: request::storage::CompleteStorageRequest) -> Option<request::storage::StorageResponse>;
 
 	/// Provide contract code for the specified (block_hash, code_hash) pair.
-	fn contract_code(&self, req: request::CompleteCodeRequest) -> Option<request::CodeResponse>;
+	fn contract_code(&self, req: request::contract_code::CompleteCodeRequest) -> Option<request::contract_code::CodeResponse>;
 
 	/// Provide a header proof from a given Canonical Hash Trie as well as the
 	/// corresponding header.
-	fn header_proof(&self, req: request::CompleteHeaderProofRequest) -> Option<request::HeaderProofResponse>;
+	fn header_proof(&self, req: request::header_proof::CompleteHeaderProofRequest) -> Option<request::header_proof::HeaderProofResponse>;
 
 	/// Provide pending transactions.
 	fn transactions_to_propagate(&self) -> Vec<PendingTransaction>;
 
 	/// Provide a proof-of-execution for the given transaction proof request.
 	/// Returns a vector of all state items necessary to execute the transaction.
-	fn transaction_proof(&self, req: request::CompleteExecutionRequest) -> Option<request::ExecutionResponse>;
+	fn transaction_proof(&self, req: request::execution::CompleteExecutionRequest) -> Option<request::execution::ExecutionResponse>;
 
 	/// Provide epoch signal data at given block hash. This should be just the
-	fn epoch_signal(&self, req: request::CompleteSignalRequest) -> Option<request::SignalResponse>;
+	fn epoch_signal(&self, req: request::epoch_signal::CompleteSignalRequest) -> Option<request::epoch_signal::SignalResponse>;
 }
 
 // Implementation of a light client data provider for a client.
@@ -158,31 +158,31 @@ impl<T: ProvingBlockChainClient + ?Sized> Provider for T {
 		ClientBlockInfo::block_header(self, id)
 	}
 
-	fn transaction_index(&self, req: request::CompleteTransactionIndexRequest)
-		-> Option<request::TransactionIndexResponse>
+	fn transaction_index(&self, req: request::transaction_index::CompleteTransactionIndexRequest)
+						 -> Option<request::transaction_index::TransactionIndexResponse>
 	{
 		use common_types::ids::TransactionId;
 
-		self.transaction_receipt(TransactionId::Hash(req.hash)).map(|receipt| request::TransactionIndexResponse {
+		self.transaction_receipt(TransactionId::Hash(req.hash)).map(|receipt| request::transaction_index::TransactionIndexResponse {
 			num: receipt.block_number,
 			hash: receipt.block_hash,
 			index: receipt.transaction_index as u64,
 		})
 	}
 
-	fn block_body(&self, req: request::CompleteBodyRequest) -> Option<request::BodyResponse> {
+	fn block_body(&self, req: request::block_body::CompleteBodyRequest) -> Option<request::block_body::BodyResponse> {
 		BlockChainClient::block_body(self, BlockId::Hash(req.hash))
-			.map(|body| ::request::BodyResponse { body })
+			.map(|body| ::request::block_body::BodyResponse { body })
 	}
 
-	fn block_receipts(&self, req: request::CompleteReceiptsRequest) -> Option<request::ReceiptsResponse> {
+	fn block_receipts(&self, req: request::block_receipts::CompleteReceiptsRequest) -> Option<request::block_receipts::ReceiptsResponse> {
 		BlockChainClient::block_receipts(self, &req.hash)
-			.map(|x| ::request::ReceiptsResponse { receipts: x.receipts })
+			.map(|x| ::request::block_receipts::ReceiptsResponse { receipts: x.receipts })
 	}
 
-	fn account_proof(&self, req: request::CompleteAccountRequest) -> Option<request::AccountResponse> {
+	fn account_proof(&self, req: request::account::CompleteAccountRequest) -> Option<request::account::AccountResponse> {
 		self.prove_account(req.address_hash, BlockId::Hash(req.block_hash)).map(|(proof, acc)| {
-			::request::AccountResponse {
+			::request::account::AccountResponse {
 				proof,
 				nonce: acc.nonce,
 				balance: acc.balance,
@@ -192,21 +192,21 @@ impl<T: ProvingBlockChainClient + ?Sized> Provider for T {
 		})
 	}
 
-	fn storage_proof(&self, req: request::CompleteStorageRequest) -> Option<request::StorageResponse> {
+	fn storage_proof(&self, req: request::storage::CompleteStorageRequest) -> Option<request::storage::StorageResponse> {
 		self.prove_storage(req.address_hash, req.key_hash, BlockId::Hash(req.block_hash)).map(|(proof, item) | {
-			::request::StorageResponse {
+			::request::storage::StorageResponse {
 				proof,
 				value: item,
 			}
 		})
 	}
 
-	fn contract_code(&self, req: request::CompleteCodeRequest) -> Option<request::CodeResponse> {
+	fn contract_code(&self, req: request::contract_code::CompleteCodeRequest) -> Option<request::contract_code::CodeResponse> {
 		self.state_data(&req.code_hash)
-			.map(|code| ::request::CodeResponse { code })
+			.map(|code| ::request::contract_code::CodeResponse { code })
 	}
 
-	fn header_proof(&self, req: request::CompleteHeaderProofRequest) -> Option<request::HeaderProofResponse> {
+	fn header_proof(&self, req: request::header_proof::CompleteHeaderProofRequest) -> Option<request::header_proof::HeaderProofResponse> {
 		let cht_number = match cht::block_to_cht_number(req.num) {
 			Some(cht_num) => cht_num,
 			None => {
@@ -251,7 +251,7 @@ impl<T: ProvingBlockChainClient + ?Sized> Provider for T {
 
 		// prove our result.
 		match cht.prove(req.num, 0) {
-			Ok(Some(proof)) => Some(::request::HeaderProofResponse {
+			Ok(Some(proof)) => Some(::request::header_proof::HeaderProofResponse {
 				proof,
 				hash: needed_hdr.hash(),
 				td: needed_td,
@@ -264,7 +264,7 @@ impl<T: ProvingBlockChainClient + ?Sized> Provider for T {
 		}
 	}
 
-	fn transaction_proof(&self, req: request::CompleteExecutionRequest) -> Option<request::ExecutionResponse> {
+	fn transaction_proof(&self, req: request::execution::CompleteExecutionRequest) -> Option<request::execution::ExecutionResponse> {
 		use common_types::transaction::Transaction;
 
 		let id = BlockId::Hash(req.block_hash);
@@ -282,7 +282,7 @@ impl<T: ProvingBlockChainClient + ?Sized> Provider for T {
 		}.fake_sign(req.from);
 
 		self.prove_transaction(transaction, id)
-			.map(|(_, proof)| ::request::ExecutionResponse { items: proof })
+			.map(|(_, proof)| ::request::execution::ExecutionResponse { items: proof })
 	}
 
 	fn transactions_to_propagate(&self) -> Vec<PendingTransaction> {
@@ -292,8 +292,8 @@ impl<T: ProvingBlockChainClient + ?Sized> Provider for T {
 			.collect()
 	}
 
-	fn epoch_signal(&self, req: request::CompleteSignalRequest) -> Option<request::SignalResponse> {
-		self.epoch_signal(req.block_hash).map(|signal| request::SignalResponse {
+	fn epoch_signal(&self, req: request::epoch_signal::CompleteSignalRequest) -> Option<request::epoch_signal::SignalResponse> {
+		self.epoch_signal(req.block_hash).map(|signal| request::epoch_signal::SignalResponse {
 			signal,
 		})
 	}
@@ -334,41 +334,41 @@ impl<L: AsLightClient + Send + Sync> Provider for LightProvider<L> {
 		self.client.as_light_client().block_header(id)
 	}
 
-	fn transaction_index(&self, _req: request::CompleteTransactionIndexRequest)
-		-> Option<request::TransactionIndexResponse>
+	fn transaction_index(&self, _req: request::transaction_index::CompleteTransactionIndexRequest)
+						 -> Option<request::transaction_index::TransactionIndexResponse>
 	{
 		None
 	}
 
-	fn block_body(&self, _req: request::CompleteBodyRequest) -> Option<request::BodyResponse> {
+	fn block_body(&self, _req: request::block_body::CompleteBodyRequest) -> Option<request::block_body::BodyResponse> {
 		None
 	}
 
-	fn block_receipts(&self, _req: request::CompleteReceiptsRequest) -> Option<request::ReceiptsResponse> {
+	fn block_receipts(&self, _req: request::block_receipts::CompleteReceiptsRequest) -> Option<request::block_receipts::ReceiptsResponse> {
 		None
 	}
 
-	fn account_proof(&self, _req: request::CompleteAccountRequest) -> Option<request::AccountResponse> {
+	fn account_proof(&self, _req: request::account::CompleteAccountRequest) -> Option<request::account::AccountResponse> {
 		None
 	}
 
-	fn storage_proof(&self, _req: request::CompleteStorageRequest) -> Option<request::StorageResponse> {
+	fn storage_proof(&self, _req: request::storage::CompleteStorageRequest) -> Option<request::storage::StorageResponse> {
 		None
 	}
 
-	fn contract_code(&self, _req: request::CompleteCodeRequest) -> Option<request::CodeResponse> {
+	fn contract_code(&self, _req: request::contract_code::CompleteCodeRequest) -> Option<request::contract_code::CodeResponse> {
 		None
 	}
 
-	fn header_proof(&self, _req: request::CompleteHeaderProofRequest) -> Option<request::HeaderProofResponse> {
+	fn header_proof(&self, _req: request::header_proof::CompleteHeaderProofRequest) -> Option<request::header_proof::HeaderProofResponse> {
 		None
 	}
 
-	fn transaction_proof(&self, _req: request::CompleteExecutionRequest) -> Option<request::ExecutionResponse> {
+	fn transaction_proof(&self, _req: request::execution::CompleteExecutionRequest) -> Option<request::execution::ExecutionResponse> {
 		None
 	}
 
-	fn epoch_signal(&self, _req: request::CompleteSignalRequest) -> Option<request::SignalResponse> {
+	fn epoch_signal(&self, _req: request::epoch_signal::CompleteSignalRequest) -> Option<request::epoch_signal::SignalResponse> {
 		None
 	}
 
@@ -397,7 +397,7 @@ mod tests {
 		let client = TestBlockChainClient::new();
 		client.add_blocks(2000, EachBlockWith::Nothing);
 
-		let req = ::request::CompleteHeaderProofRequest {
+		let req = ::request::header_proof::CompleteHeaderProofRequest {
 			num: 1500,
 		};
 

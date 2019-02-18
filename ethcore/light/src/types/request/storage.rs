@@ -1,0 +1,107 @@
+//! storage
+
+use super::{Field, NoSuchOutput, OutputKind, Output};
+use ethereum_types::H256;
+use bytes::Bytes;
+
+/// Potentially incomplete request for an storage proof.
+#[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
+pub struct IncompleteStorageRequest {
+	/// Block hash to request state proof for.
+	pub block_hash: Field<H256>,
+	/// Hash of the account's address.
+	pub address_hash: Field<H256>,
+	/// Hash of the storage key.
+	pub key_hash: Field<H256>,
+}
+
+impl super::IncompleteRequest for IncompleteStorageRequest {
+	type Complete = CompleteStorageRequest;
+	type Response = StorageResponse;
+
+	fn check_outputs<F>(&self, mut f: F) -> Result<(), NoSuchOutput>
+	where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
+	{
+		if let Field::BackReference(req, idx) = self.block_hash {
+			f(req, idx, OutputKind::Hash)?
+		}
+
+		if let Field::BackReference(req, idx) = self.address_hash {
+			f(req, idx, OutputKind::Hash)?
+		}
+
+		if let Field::BackReference(req, idx) = self.key_hash {
+			f(req, idx, OutputKind::Hash)?
+		}
+
+		Ok(())
+	}
+
+	fn note_outputs<F>(&self, mut f: F) where F: FnMut(usize, OutputKind) {
+		f(0, OutputKind::Hash);
+	}
+
+	fn fill<F>(&mut self, oracle: F) where F: Fn(usize, usize) -> Result<Output, NoSuchOutput> {
+		if let Field::BackReference(req, idx) = self.block_hash {
+			self.block_hash = match oracle(req, idx) {
+				Ok(Output::Hash(block_hash)) => Field::Scalar(block_hash),
+				_ => Field::BackReference(req, idx),
+			}
+		}
+
+		if let Field::BackReference(req, idx) = self.address_hash {
+			self.address_hash = match oracle(req, idx) {
+				Ok(Output::Hash(address_hash)) => Field::Scalar(address_hash),
+				_ => Field::BackReference(req, idx),
+			}
+		}
+
+		if let Field::BackReference(req, idx) = self.key_hash {
+			self.key_hash = match oracle(req, idx) {
+				Ok(Output::Hash(key_hash)) => Field::Scalar(key_hash),
+				_ => Field::BackReference(req, idx),
+			}
+		}
+	}
+
+	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
+		Ok(CompleteStorageRequest {
+			block_hash: self.block_hash.into_scalar()?,
+			address_hash: self.address_hash.into_scalar()?,
+			key_hash: self.key_hash.into_scalar()?,
+		})
+	}
+
+	fn adjust_refs<F>(&mut self, mut mapping: F) where F: FnMut(usize) -> usize {
+		self.block_hash.adjust_req(&mut mapping);
+		self.address_hash.adjust_req(&mut mapping);
+		self.key_hash.adjust_req(&mut mapping);
+	}
+}
+
+/// A complete request for a storage proof.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompleteStorageRequest {
+	/// Block hash to request state proof for.
+	pub block_hash: H256,
+	/// Hash of the account's address.
+	pub address_hash: H256,
+	/// Storage key hash.
+	pub key_hash: H256,
+}
+
+/// The output of a request for an account state proof.
+#[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
+pub struct StorageResponse {
+	/// Inclusion/exclusion proof
+	pub proof: Vec<Bytes>,
+	/// Storage value.
+	pub value: H256,
+}
+
+impl super::ResponseLike for StorageResponse {
+	/// Fill reusable outputs by providing them to the function.
+	fn fill_outputs<F>(&self, mut f: F) where F: FnMut(usize, Output) {
+		f(0, Output::Hash(self.value));
+	}
+}
