@@ -6,14 +6,14 @@ use ethereum_types::H256;
 
 /// Potentially incomplete block body request.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct IncompleteBodyRequest {
+pub struct IncompleteRequest {
 	/// Block hash to get receipts for.
 	pub hash: Field<H256>,
 }
 
-impl super::IncompleteRequest for IncompleteBodyRequest {
-	type Complete = CompleteBodyRequest;
-	type Response = BodyResponse;
+impl super::IncompleteRequest for IncompleteRequest {
+	type Complete = CompleteRequest;
+	type Response = Response;
 
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), NoSuchOutput>
 	where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
@@ -36,7 +36,7 @@ impl super::IncompleteRequest for IncompleteBodyRequest {
 	}
 
 	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
-		Ok(CompleteBodyRequest {
+		Ok(CompleteRequest {
 			hash: self.hash.into_scalar()?,
 		})
 	}
@@ -48,24 +48,24 @@ impl super::IncompleteRequest for IncompleteBodyRequest {
 
 /// A complete block body request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompleteBodyRequest {
+pub struct CompleteRequest {
 	/// The hash to get a block body for.
 	pub hash: H256,
 }
 
 /// The output of a request for block body.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BodyResponse {
+pub struct Response {
 	/// The block body.
 	pub body: encoded::Body,
 }
 
-impl super::ResponseLike for BodyResponse {
+impl super::ResponseLike for Response {
 	/// Fill reusable outputs by providing them to the function.
 	fn fill_outputs<F>(&self, _: F) where F: FnMut(usize, Output) {}
 }
 
-impl Decodable for BodyResponse {
+impl Decodable for Response {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		use common_types::header::Header as FullHeader;
 		use common_types::transaction::UnverifiedTransaction;
@@ -74,13 +74,13 @@ impl Decodable for BodyResponse {
 		let _: Vec<UnverifiedTransaction> = rlp.list_at(0)?;
 		let _: Vec<FullHeader> = rlp.list_at(1)?;
 
-		Ok(BodyResponse {
+		Ok(Response {
 			body: encoded::Body::new(rlp.as_raw().to_owned()),
 		})
 	}
 }
 
-impl Encodable for BodyResponse {
+impl Encodable for Response {
 	fn rlp_append(&self, s: &mut RlpStream) {
 		s.append_raw(&self.body.rlp().as_raw(), 1);
 	}

@@ -177,7 +177,7 @@ fn single_request() {
 	harness.service.on_responses(
 		&Context::WithPeer(peer_id),
 		req_id,
-		&[Response::Headers(basic_request::header::HeadersResponse { headers: vec![encoded] })]
+		&[Response::Headers(basic_request::header::Response { headers: vec![encoded] })]
 	);
 
 	assert!(recv.wait().is_ok());
@@ -248,7 +248,7 @@ fn reassign() {
 	harness.service.on_responses(
 		&Context::WithPeer(peer_ids.1),
 		req_ids.1,
-		&[Response::Headers(basic_request::header::HeadersResponse { headers: vec![encoded] })]
+		&[Response::Headers(basic_request::header::Response { headers: vec![encoded] })]
 	);
 
 	assert!(recv.wait().is_ok());
@@ -295,7 +295,7 @@ fn partial_response() {
 	harness.service.on_responses(
 		&Context::WithPeer(peer_id),
 		req_ids.0,
-		&[Response::Headers(basic_request::header::HeadersResponse { headers: vec![encoded1] })]
+		&[Response::Headers(basic_request::header::Response { headers: vec![encoded1] })]
 	);
 
 	assert_eq!(harness.service.pending.read().len(), 1);
@@ -307,7 +307,7 @@ fn partial_response() {
 	harness.service.on_responses(
 		&Context::WithPeer(peer_id),
 		req_ids.1,
-		&[Response::Headers(basic_request::header::HeadersResponse { headers: vec![encoded2] })]
+		&[Response::Headers(basic_request::header::Response { headers: vec![encoded2] })]
 	);
 
 	assert!(recv.wait().is_ok());
@@ -356,8 +356,8 @@ fn part_bad_part_good() {
 		&Context::Punish(peer_id),
 		req_ids.0,
 		&[
-			Response::Headers(basic_request::header::HeadersResponse { headers: vec![encoded1] }),
-			Response::Receipts(basic_request::block_receipts::ReceiptsResponse { receipts: vec![] } ),
+			Response::Headers(basic_request::header::Response { headers: vec![encoded1] }),
+			Response::Receipts(basic_request::block_receipts::Response { receipts: vec![] } ),
 		]
 	);
 
@@ -375,7 +375,7 @@ fn part_bad_part_good() {
 	harness.service.on_responses(
 		&Context::WithPeer(peer_id),
 		req_ids.1,
-		&[Response::Headers(basic_request::header::HeadersResponse { headers: vec![encoded2] })]
+		&[Response::Headers(basic_request::header::Response { headers: vec![encoded2] })]
 	);
 
 	assert!(recv.wait().is_ok());
@@ -407,7 +407,7 @@ fn wrong_kind() {
 	harness.service.on_responses(
 		&Context::Punish(peer_id),
 		req_id,
-		&[Response::Receipts(basic_request::block_receipts::ReceiptsResponse { receipts: vec![] })]
+		&[Response::Receipts(basic_request::block_receipts::Response { receipts: vec![] })]
 	);
 
 	assert_eq!(harness.service.pending.read().len(), 1);
@@ -446,8 +446,8 @@ fn back_references() {
 		&Context::WithPeer(peer_id),
 		req_id,
 		&[
-			Response::Headers(basic_request::header::HeadersResponse { headers: vec![encoded] }),
-			Response::Receipts(basic_request::block_receipts::ReceiptsResponse { receipts: vec![] }),
+			Response::Headers(basic_request::header::Response { headers: vec![encoded] }),
+			Response::Receipts(basic_request::block_receipts::Response { receipts: vec![] }),
 		]
 	);
 
@@ -503,7 +503,7 @@ fn fill_from_cache() {
 		&Context::WithPeer(peer_id),
 		req_id,
 		&[
-			Response::Headers(basic_request::header::HeadersResponse { headers: vec![encoded] }),
+			Response::Headers(basic_request::header::Response { headers: vec![encoded] }),
 		]
 	);
 

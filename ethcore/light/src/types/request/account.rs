@@ -5,16 +5,16 @@ use bytes::Bytes;
 
 /// Potentially incomplete request for an account proof.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct IncompleteAccountRequest {
+pub struct IncompleteRequest {
 	/// Block hash to request state proof for.
 	pub block_hash: Field<H256>,
 	/// Hash of the account's address.
 	pub address_hash: Field<H256>,
 }
 
-impl super::IncompleteRequest for IncompleteAccountRequest {
-	type Complete = CompleteAccountRequest;
-	type Response = AccountResponse;
+impl super::IncompleteRequest for IncompleteRequest {
+	type Complete = CompleteRequest;
+	type Response = Response;
 
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), NoSuchOutput>
 	where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
@@ -52,7 +52,7 @@ impl super::IncompleteRequest for IncompleteAccountRequest {
 	}
 
 	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
-		Ok(CompleteAccountRequest {
+		Ok(CompleteRequest {
 			block_hash: self.block_hash.into_scalar()?,
 			address_hash: self.address_hash.into_scalar()?,
 		})
@@ -66,7 +66,7 @@ impl super::IncompleteRequest for IncompleteAccountRequest {
 
 /// A complete request for an account.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompleteAccountRequest {
+pub struct CompleteRequest {
 	/// Block hash to request state proof for.
 	pub block_hash: H256,
 	/// Hash of the account's address.
@@ -75,7 +75,7 @@ pub struct CompleteAccountRequest {
 
 /// The output of a request for an account state proof.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct AccountResponse {
+pub struct Response {
 	/// Inclusion/exclusion proof
 	pub proof: Vec<Bytes>,
 	/// Account nonce.
@@ -88,7 +88,7 @@ pub struct AccountResponse {
 	pub storage_root: H256,
 }
 
-impl super::ResponseLike for AccountResponse {
+impl super::ResponseLike for Response {
 	/// Fill reusable outputs by providing them to the function.
 	fn fill_outputs<F>(&self, mut f: F) where F: FnMut(usize, Output) {
 		f(0, Output::Hash(self.code_hash));

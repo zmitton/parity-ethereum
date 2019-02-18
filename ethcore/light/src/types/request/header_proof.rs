@@ -7,14 +7,14 @@ use bytes::Bytes;
 
 /// Potentially incomplete header proof request.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct IncompleteHeaderProofRequest {
+pub struct IncompleteRequest {
 	/// Block number.
 	pub num: Field<u64>,
 }
 
-impl super::IncompleteRequest for IncompleteHeaderProofRequest {
-	type Complete = CompleteHeaderProofRequest;
-	type Response = HeaderProofResponse;
+impl super::IncompleteRequest for IncompleteRequest {
+	type Complete = CompleteRequest;
+	type Response = Response;
 
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), NoSuchOutput>
 	where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
@@ -39,7 +39,7 @@ impl super::IncompleteRequest for IncompleteHeaderProofRequest {
 	}
 
 	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
-		Ok(CompleteHeaderProofRequest {
+		Ok(CompleteRequest {
 			num: self.num.into_scalar()?,
 		})
 	}
@@ -51,14 +51,14 @@ impl super::IncompleteRequest for IncompleteHeaderProofRequest {
 
 /// A complete header proof request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompleteHeaderProofRequest {
+pub struct CompleteRequest {
 	/// The number to get a header proof for.
 	pub num: u64,
 }
 
 /// The output of a request for a header proof.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HeaderProofResponse {
+pub struct Response {
 	/// Inclusion proof of the header and total difficulty in the CHT.
 	pub proof: Vec<Bytes>,
 	/// The proved header's hash.
@@ -67,16 +67,16 @@ pub struct HeaderProofResponse {
 	pub td: U256,
 }
 
-impl super::ResponseLike for HeaderProofResponse {
+impl super::ResponseLike for Response {
 	/// Fill reusable outputs by providing them to the function.
 	fn fill_outputs<F>(&self, mut f: F) where F: FnMut(usize, Output) {
 		f(0, Output::Hash(self.hash));
 	}
 }
 
-impl Decodable for HeaderProofResponse {
+impl Decodable for Response {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-		Ok(HeaderProofResponse {
+		Ok(Response {
 			proof: rlp.list_at(0)?,
 			hash: rlp.val_at(1)?,
 			td: rlp.val_at(2)?,
@@ -84,7 +84,7 @@ impl Decodable for HeaderProofResponse {
 	}
 }
 
-impl Encodable for HeaderProofResponse {
+impl Encodable for Response {
 	fn rlp_append(&self, s: &mut RlpStream) {
 		s.begin_list(3)
 			.append_list::<Vec<u8>,_>(&self.proof[..])

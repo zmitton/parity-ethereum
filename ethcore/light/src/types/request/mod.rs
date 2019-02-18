@@ -204,50 +204,50 @@ pub type NetworkRequests = Batch<Request>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
 	/// A request for block headers.
-	Headers(header::IncompleteHeadersRequest),
+	Headers(header::IncompleteRequest),
 	/// A request for a header proof (from a CHT)
-	HeaderProof(header_proof::IncompleteHeaderProofRequest),
+	HeaderProof(header_proof::IncompleteRequest),
 	/// A request for a transaction index by hash.
-	TransactionIndex(transaction_index::IncompleteTransactionIndexRequest),
+	TransactionIndex(transaction_index::IncompleteRequest),
 	/// A request for a block's receipts.
-	Receipts(block_receipts::IncompleteReceiptsRequest),
+	Receipts(block_receipts::IncompleteRequest),
 	/// A request for a block body.
-	Body(block_body::IncompleteBodyRequest),
+	Body(block_body::IncompleteRequest),
 	/// A request for a merkle proof of an account.
-	Account(account::IncompleteAccountRequest),
+	Account(account::IncompleteRequest),
 	/// A request for a merkle proof of contract storage.
-	Storage(storage::IncompleteStorageRequest),
+	Storage(storage::IncompleteRequest),
 	/// A request for contract code.
-	Code(contract_code::IncompleteCodeRequest),
+	Code(contract_code::IncompleteRequest),
 	/// A request for proof of execution,
-	Execution(execution::IncompleteExecutionRequest),
+	Execution(execution::IncompleteRequest),
 	/// A request for an epoch signal.
-	Signal(epoch_signal::IncompleteSignalRequest),
+	Signal(epoch_signal::IncompleteRequest),
 }
 
 /// All request types, in an answerable state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompleteRequest {
 	/// A request for block headers.
-	Headers(header::CompleteHeadersRequest),
+	Headers(header::CompleteRequest),
 	/// A request for a header proof (from a CHT)
-	HeaderProof(header_proof::CompleteHeaderProofRequest),
+	HeaderProof(header_proof::CompleteRequest),
 	/// A request for a transaction index by hash.
-	TransactionIndex(transaction_index::CompleteTransactionIndexRequest),
+	TransactionIndex(transaction_index::CompleteRequest),
 	/// A request for a block's receipts.
-	Receipts(block_receipts::CompleteReceiptsRequest),
+	Receipts(block_receipts::CompleteRequest),
 	/// A request for a block body.
-	Body(block_body::CompleteBodyRequest),
+	Body(block_body::CompleteRequest),
 	/// A request for a merkle proof of an account.
-	Account(account::CompleteAccountRequest),
+	Account(account::CompleteRequest),
 	/// A request for a merkle proof of contract storage.
-	Storage(storage::CompleteStorageRequest),
+	Storage(storage::CompleteRequest),
 	/// A request for contract code.
-	Code(contract_code::CompleteCodeRequest),
+	Code(contract_code::CompleteRequest),
 	/// A request for proof of execution,
-	Execution(execution::CompleteExecutionRequest),
+	Execution(execution::CompleteRequest),
 	/// A request for an epoch signal.
-	Signal(epoch_signal::CompleteSignalRequest),
+	Signal(epoch_signal::CompleteRequest),
 }
 
 impl CompleteRequest {
@@ -476,25 +476,25 @@ impl Encodable for Kind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Response {
 	/// A response for block headers.
-	Headers(header::HeadersResponse),
+	Headers(header::Response),
 	/// A response for a header proof (from a CHT)
-	HeaderProof(header_proof::HeaderProofResponse),
+	HeaderProof(header_proof::Response),
 	/// A response for a transaction index.
-	TransactionIndex(transaction_index::TransactionIndexResponse),
+	TransactionIndex(transaction_index::Response),
 	/// A response for a block's receipts.
-	Receipts(block_receipts::ReceiptsResponse),
+	Receipts(block_receipts::Response),
 	/// A response for a block body.
-	Body(block_body::BodyResponse),
+	Body(block_body::Response),
 	/// A response for a merkle proof of an account.
-	Account(account::AccountResponse),
+	Account(account::Response),
 	/// A response for a merkle proof of contract storage.
-	Storage(storage::StorageResponse),
+	Storage(storage::Response),
 	/// A response for contract code.
-	Code(contract_code::CodeResponse),
+	Code(contract_code::Response),
 	/// A response for proof of execution,
-	Execution(execution::ExecutionResponse),
+	Execution(execution::Response),
 	/// A response for epoch change signal.
-	Signal(epoch_signal::SignalResponse),
+	Signal(epoch_signal::Response),
 }
 
 impl ResponseLike for Response {
@@ -665,7 +665,7 @@ mod tests {
 
 	#[test]
 	fn headers_roundtrip() {
-		let req = header::IncompleteHeadersRequest {
+		let req = header::IncompleteRequest {
 			start: Field::Scalar(5u64.into()),
 			skip: 0,
 			max: 100,
@@ -673,7 +673,7 @@ mod tests {
 		};
 
 		let full_req = Request::Headers(req.clone());
-		let res = header::HeadersResponse {
+		let res = header::Response {
 			headers: vec![
 				::common_types::encoded::Header::new(::rlp::encode(&Header::default()))
 			]
@@ -688,12 +688,12 @@ mod tests {
 
 	#[test]
 	fn header_proof_roundtrip() {
-		let req = header_proof::IncompleteHeaderProofRequest {
+		let req = header_proof::IncompleteRequest {
 			num: Field::BackReference(1, 234),
 		};
 
 		let full_req = Request::HeaderProof(req.clone());
-		let res = header_proof::HeaderProofResponse {
+		let res = header_proof::Response {
 			proof: vec![vec![1, 2, 3], vec![4, 5, 6]],
 			hash: Default::default(),
 			td: 100.into(),
@@ -708,12 +708,12 @@ mod tests {
 
 	#[test]
 	fn transaction_index_roundtrip() {
-		let req = transaction_index::IncompleteTransactionIndexRequest {
+		let req = transaction_index::IncompleteRequest {
 			hash: Field::Scalar(Default::default()),
 		};
 
 		let full_req = Request::TransactionIndex(req.clone());
-		let res = transaction_index::TransactionIndexResponse {
+		let res = transaction_index::Response {
 			num: 1000,
 			hash: ::ethereum_types::H256::random(),
 			index: 4,
@@ -729,13 +729,13 @@ mod tests {
 	#[test]
 	fn receipts_roundtrip() {
 		use common_types::receipt::{Receipt, TransactionOutcome};
-		let req = block_receipts::IncompleteReceiptsRequest {
+		let req = block_receipts::IncompleteRequest {
 			hash: Field::Scalar(Default::default()),
 		};
 
 		let full_req = Request::Receipts(req.clone());
 		let receipt = Receipt::new(TransactionOutcome::Unknown, Default::default(), Vec::new());
-		let res = block_receipts::ReceiptsResponse {
+		let res = block_receipts::Response {
 			receipts: vec![receipt.clone(), receipt],
 		};
 		let full_res = Response::Receipts(res.clone());
@@ -749,12 +749,12 @@ mod tests {
 	#[test]
 	fn body_roundtrip() {
 		use common_types::transaction::{Transaction, UnverifiedTransaction};
-		let req = block_body::IncompleteBodyRequest {
+		let req = block_body::IncompleteRequest {
 			hash: Field::Scalar(Default::default()),
 		};
 
 		let full_req = Request::Body(req.clone());
-		let res = block_body::BodyResponse {
+		let res = block_body::Response {
 			body: {
 				let header = ::common_types::header::Header::default();
 				let tx = UnverifiedTransaction::from(Transaction::default().fake_sign(Default::default()));
@@ -775,13 +775,13 @@ mod tests {
 
 	#[test]
 	fn account_roundtrip() {
-		let req = account::IncompleteAccountRequest {
+		let req = account::IncompleteRequest {
 			block_hash: Field::Scalar(Default::default()),
 			address_hash: Field::BackReference(1, 2),
 		};
 
 		let full_req = Request::Account(req.clone());
-		let res = account::AccountResponse {
+		let res = account::Response {
 			proof: vec![vec![1, 2, 3], vec![4, 5, 6]],
 			nonce: 100.into(),
 			balance: 123456.into(),
@@ -798,14 +798,14 @@ mod tests {
 
 	#[test]
 	fn storage_roundtrip() {
-		let req = storage::IncompleteStorageRequest {
+		let req = storage::IncompleteRequest {
 			block_hash: Field::Scalar(Default::default()),
 			address_hash: Field::BackReference(1, 2),
 			key_hash: Field::BackReference(3, 2),
 		};
 
 		let full_req = Request::Storage(req.clone());
-		let res = storage::StorageResponse {
+		let res = storage::Response {
 			proof: vec![vec![1, 2, 3], vec![4, 5, 6]],
 			value: H256::default(),
 		};
@@ -819,13 +819,13 @@ mod tests {
 
 	#[test]
 	fn code_roundtrip() {
-		let req = contract_code::IncompleteCodeRequest {
+		let req = contract_code::IncompleteRequest {
 			block_hash: Field::Scalar(Default::default()),
 			code_hash: Field::BackReference(3, 2),
 		};
 
 		let full_req = Request::Code(req.clone());
-		let res = contract_code::CodeResponse {
+		let res = contract_code::Response {
 			code: vec![1, 2, 3, 4, 5, 6, 7, 6, 5, 4],
 		};
 		let full_res = Response::Code(res.clone());
@@ -840,7 +840,7 @@ mod tests {
 	fn execution_roundtrip() {
 		use kvdb::DBValue;
 
-		let req = execution::IncompleteExecutionRequest {
+		let req = execution::IncompleteRequest {
 			block_hash: Field::Scalar(Default::default()),
 			from: Default::default(),
 			action: ::common_types::transaction::Action::Create,
@@ -851,7 +851,7 @@ mod tests {
 		};
 
 		let full_req = Request::Execution(req.clone());
-		let res = execution::ExecutionResponse {
+		let res = execution::Response {
 			items: vec![DBValue::new(), {
 				let mut value = DBValue::new();
 				value.append_slice(&[1, 1, 1, 2, 3]);
@@ -870,7 +870,7 @@ mod tests {
 	fn vec_test() {
 		use rlp::*;
 
-		let reqs: Vec<_> = (0..10).map(|_| execution::IncompleteExecutionRequest {
+		let reqs: Vec<_> = (0..10).map(|_| execution::IncompleteRequest {
 			block_hash: Field::Scalar(Default::default()),
 			from: Default::default(),
 			action: ::common_types::transaction::Action::Create,
@@ -897,20 +897,20 @@ mod tests {
 
 		let body = ::common_types::encoded::Body::new(stream.out());
 		let reqs = vec![
-			Response::Headers(header::HeadersResponse { headers: vec![] }),
-			Response::HeaderProof(header_proof::HeaderProofResponse { proof: vec![], hash: Default::default(), td: 100.into()}),
-			Response::Receipts(block_receipts::ReceiptsResponse { receipts: vec![Receipt::new(TransactionOutcome::Unknown, Default::default(), Vec::new())] }),
-			Response::Body(block_body::BodyResponse { body: body }),
-			Response::Account(account::AccountResponse {
+			Response::Headers(header::Response { headers: vec![] }),
+			Response::HeaderProof(header_proof::Response { proof: vec![], hash: Default::default(), td: 100.into()}),
+			Response::Receipts(block_receipts::Response { receipts: vec![Receipt::new(TransactionOutcome::Unknown, Default::default(), Vec::new())] }),
+			Response::Body(block_body::Response { body: body }),
+			Response::Account(account::Response {
 				proof: vec![],
 				nonce: 100.into(),
 				balance: 123.into(),
 				code_hash: Default::default(),
 				storage_root: Default::default()
 			}),
-			Response::Storage(storage::StorageResponse { proof: vec![], value: H256::default() }),
-			Response::Code(contract_code::CodeResponse { code: vec![1, 2, 3, 4, 5] }),
-			Response::Execution(execution::ExecutionResponse { items: vec![] }),
+			Response::Storage(storage::Response { proof: vec![], value: H256::default() }),
+			Response::Code(contract_code::Response { code: vec![1, 2, 3, 4, 5] }),
+			Response::Execution(execution::Response { items: vec![] }),
 		];
 
 		let raw = ::rlp::encode_list(&reqs);
@@ -919,12 +919,12 @@ mod tests {
 
 	#[test]
 	fn epoch_signal_roundtrip() {
-		let req = epoch_signal::IncompleteSignalRequest {
+		let req = epoch_signal::IncompleteRequest {
 			block_hash: Field::Scalar(Default::default()),
 		};
 
 		let full_req = Request::Signal(req.clone());
-		let res = epoch_signal::SignalResponse {
+		let res = epoch_signal::Response {
 			signal: vec![1, 2, 3, 4, 5, 6, 7, 6, 5, 4],
 		};
 		let full_res = Response::Signal(res.clone());

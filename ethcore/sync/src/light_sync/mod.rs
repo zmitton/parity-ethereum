@@ -45,7 +45,7 @@ use light::net::{
 	EventContext, Capabilities, ReqId, Status,
 	Error as NetError,
 };
-use light::request::{self, CompleteHeadersRequest as HeadersRequest};
+use light::request::{self, header::CompleteRequest as HeadersRequest};
 use network::PeerId;
 use ethereum_types::{H256, U256};
 use parking_lot::{Mutex, RwLock};
@@ -625,7 +625,7 @@ impl<L: AsLightClient> LightSync<L> {
 
 				let request = {
 					let mut builder = request::Builder::default();
-					builder.push(request::Request::Headers(request::IncompleteHeadersRequest {
+					builder.push(request::Request::Headers(request::header::IncompleteRequest {
 						start: req.start.into(),
 						skip: req.skip,
 						max: req.max,

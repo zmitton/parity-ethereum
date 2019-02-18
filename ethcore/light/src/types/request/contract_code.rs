@@ -5,16 +5,16 @@ use bytes::Bytes;
 
 /// Potentially incomplete contract code request.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct IncompleteCodeRequest {
+pub struct IncompleteRequest {
 	/// The block hash to request the state for.
 	pub block_hash: Field<H256>,
 	/// The code hash.
 	pub code_hash: Field<H256>,
 }
 
-impl super::IncompleteRequest for IncompleteCodeRequest {
-	type Complete = CompleteCodeRequest;
-	type Response = CodeResponse;
+impl super::IncompleteRequest for IncompleteRequest {
+	type Complete = CompleteRequest;
+	type Response = Response;
 
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), NoSuchOutput>
 	where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
@@ -48,7 +48,7 @@ impl super::IncompleteRequest for IncompleteCodeRequest {
 	}
 
 	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
-		Ok(CompleteCodeRequest {
+		Ok(CompleteRequest {
 			block_hash: self.block_hash.into_scalar()?,
 			code_hash: self.code_hash.into_scalar()?,
 		})
@@ -62,7 +62,7 @@ impl super::IncompleteRequest for IncompleteCodeRequest {
 
 /// A complete request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompleteCodeRequest {
+pub struct CompleteRequest {
 	/// The block hash to request the state for.
 	pub block_hash: H256,
 	/// The code hash.
@@ -71,12 +71,12 @@ pub struct CompleteCodeRequest {
 
 /// The output of a request for
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodableWrapper, RlpDecodableWrapper)]
-pub struct CodeResponse {
+pub struct Response {
 	/// The requested code.
 	pub code: Bytes,
 }
 
-impl super::ResponseLike for CodeResponse {
+impl super::ResponseLike for Response {
 	/// Fill reusable outputs by providing them to the function.
 	fn fill_outputs<F>(&self, _: F) where F: FnMut(usize, Output) {}
 }

@@ -216,10 +216,10 @@ mod tests {
 	#[test]
 	fn all_scalar() {
 		let mut builder = Builder::default();
-		builder.push(Request::HeaderProof(header_proof::IncompleteHeaderProofRequest {
+		builder.push(Request::HeaderProof(header_proof::IncompleteRequest {
 			num: 100.into(),
 		})).unwrap();
-		builder.push(Request::Receipts(block_receipts::IncompleteReceiptsRequest {
+		builder.push(Request::Receipts(block_receipts::IncompleteRequest {
 			hash: H256::default().into(),
 		})).unwrap();
 	}
@@ -228,7 +228,7 @@ mod tests {
 	#[should_panic]
 	fn missing_backref() {
 		let mut builder = Builder::default();
-		builder.push(Request::HeaderProof(header_proof::IncompleteHeaderProofRequest {
+		builder.push(Request::HeaderProof(header_proof::IncompleteRequest {
 			num: Field::BackReference(100, 3),
 		})).unwrap();
 	}
@@ -237,10 +237,10 @@ mod tests {
 	#[should_panic]
 	fn wrong_kind() {
 		let mut builder = Builder::default();
-		assert!(builder.push(Request::HeaderProof(header_proof::IncompleteHeaderProofRequest {
+		assert!(builder.push(Request::HeaderProof(header_proof::IncompleteRequest {
 			num: 100.into(),
 		})).is_ok());
-		builder.push(Request::HeaderProof(header_proof::IncompleteHeaderProofRequest {
+		builder.push(Request::HeaderProof(header_proof::IncompleteRequest {
 			num: Field::BackReference(0, 0),
 		})).unwrap();
 	}
@@ -248,10 +248,10 @@ mod tests {
 	#[test]
 	fn good_backreference() {
 		let mut builder = Builder::default();
-		builder.push(Request::HeaderProof(header_proof::IncompleteHeaderProofRequest {
+		builder.push(Request::HeaderProof(header_proof::IncompleteRequest {
 			num: 100.into(), // header proof puts hash at output 0.
 		})).unwrap();
-		builder.push(Request::Receipts(block_receipts::IncompleteReceiptsRequest {
+		builder.push(Request::Receipts(block_receipts::IncompleteRequest {
 			hash: Field::BackReference(0, 0),
 		})).unwrap();
 	}

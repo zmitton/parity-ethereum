@@ -6,28 +6,28 @@ use bytes::Bytes;
 
 /// Potentially incomplete epoch signal request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IncompleteSignalRequest {
+pub struct IncompleteRequest {
 	/// The block hash to request the signal for.
 	pub block_hash: Field<H256>,
 }
 
-impl Decodable for IncompleteSignalRequest {
+impl Decodable for IncompleteRequest {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-		Ok(IncompleteSignalRequest {
+		Ok(IncompleteRequest {
 			block_hash: rlp.val_at(0)?,
 		})
 	}
 }
 
-impl Encodable for IncompleteSignalRequest {
+impl Encodable for IncompleteRequest {
 	fn rlp_append(&self, s: &mut RlpStream) {
 		s.begin_list(1).append(&self.block_hash);
 	}
 }
 
-impl super::IncompleteRequest for IncompleteSignalRequest {
-	type Complete = CompleteSignalRequest;
-	type Response = SignalResponse;
+impl super::IncompleteRequest for IncompleteRequest {
+	type Complete = CompleteRequest;
+	type Response = Response;
 
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), NoSuchOutput>
 	where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
@@ -51,7 +51,7 @@ impl super::IncompleteRequest for IncompleteSignalRequest {
 	}
 
 	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
-		Ok(CompleteSignalRequest {
+		Ok(CompleteRequest {
 			block_hash: self.block_hash.into_scalar()?,
 		})
 	}
@@ -63,33 +63,33 @@ impl super::IncompleteRequest for IncompleteSignalRequest {
 
 /// A complete request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompleteSignalRequest {
+pub struct CompleteRequest {
 	/// The block hash to request the epoch signal for.
 	pub block_hash: H256,
 }
 
 /// The output of a request for an epoch signal.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SignalResponse {
+pub struct Response {
 	/// The requested epoch signal.
 	pub signal: Bytes,
 }
 
-impl super::ResponseLike for SignalResponse {
+impl super::ResponseLike for Response {
 	/// Fill reusable outputs by providing them to the function.
 	fn fill_outputs<F>(&self, _: F) where F: FnMut(usize, Output) {}
 }
 
-impl Decodable for SignalResponse {
+impl Decodable for Response {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 
-		Ok(SignalResponse {
+		Ok(Response {
 			signal: rlp.as_val()?,
 		})
 	}
 }
 
-impl Encodable for SignalResponse {
+impl Encodable for Response {
 	fn rlp_append(&self, s: &mut RlpStream) {
 		s.append(&self.signal);
 	}

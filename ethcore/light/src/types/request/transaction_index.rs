@@ -5,14 +5,14 @@ use ethereum_types::H256;
 
 /// Potentially incomplete transaction index request.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct IncompleteTransactionIndexRequest {
+pub struct IncompleteRequest {
 	/// Transaction hash to get index for.
 	pub hash: Field<H256>,
 }
 
-impl super::IncompleteRequest for IncompleteTransactionIndexRequest {
-	type Complete = CompleteTransactionIndexRequest;
-	type Response = TransactionIndexResponse;
+impl super::IncompleteRequest for IncompleteRequest {
+	type Complete = CompleteRequest;
+	type Response = Response;
 
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), NoSuchOutput>
 	where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
@@ -38,7 +38,7 @@ impl super::IncompleteRequest for IncompleteTransactionIndexRequest {
 	}
 
 	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
-		Ok(CompleteTransactionIndexRequest {
+		Ok(CompleteRequest {
 			hash: self.hash.into_scalar()?,
 		})
 	}
@@ -50,14 +50,14 @@ impl super::IncompleteRequest for IncompleteTransactionIndexRequest {
 
 /// A complete transaction index request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompleteTransactionIndexRequest {
+pub struct CompleteRequest {
 	/// The transaction hash to get index for.
 	pub hash: H256,
 }
 
 /// The output of a request for transaction index.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct TransactionIndexResponse {
+pub struct Response {
 	/// Block number.
 	pub num: u64,
 	/// Block hash
@@ -66,7 +66,7 @@ pub struct TransactionIndexResponse {
 	pub index: u64,
 }
 
-impl super::ResponseLike for TransactionIndexResponse {
+impl super::ResponseLike for Response {
 	/// Fill reusable outputs by providing them to the function.
 	fn fill_outputs<F>(&self, mut f: F) where F: FnMut(usize, Output) {
 		f(0, Output::Number(self.num));

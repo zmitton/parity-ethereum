@@ -24,7 +24,7 @@ use types::encoded;
 use types::header::Header;
 
 use light::net::ReqId;
-use light::request::CompleteHeadersRequest as HeadersRequest;
+use light::request::header::CompleteRequest as HeadersRequest;
 
 use network::PeerId;
 use ethereum_types::H256;

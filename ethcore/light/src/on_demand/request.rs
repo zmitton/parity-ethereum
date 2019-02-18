@@ -142,7 +142,7 @@ macro_rules! impl_single {
 impl_single!(HeaderProof, HeaderProof, (H256, U256));
 impl_single!(HeaderByHash, HeaderByHash, encoded::Header);
 impl_single!(HeaderWithAncestors, HeaderWithAncestors, Vec<encoded::Header>);
-impl_single!(TransactionIndex, TransactionIndex, net_request::transaction_index::TransactionIndexResponse);
+impl_single!(TransactionIndex, TransactionIndex, net_request::transaction_index::Response);
 impl_single!(Receipts, BlockReceipts, Vec<Receipt>);
 impl_single!(Body, Body, encoded::Block);
 impl_single!(Account, Account, Option<BasicAccount>);
@@ -250,23 +250,23 @@ impl From<encoded::Header> for HeaderRef {
 #[derive(Clone)]
 #[allow(missing_docs)]
 pub enum CheckedRequest {
-	HeaderProof(HeaderProof, net_request::header_proof::IncompleteHeaderProofRequest),
-	HeaderByHash(HeaderByHash, net_request::header::IncompleteHeadersRequest),
-	HeaderWithAncestors(HeaderWithAncestors, net_request::header::IncompleteHeadersRequest),
-	TransactionIndex(TransactionIndex, net_request::transaction_index::IncompleteTransactionIndexRequest),
-	Receipts(BlockReceipts, net_request::block_receipts::IncompleteReceiptsRequest),
-	Body(Body, net_request::block_body::IncompleteBodyRequest),
-	Account(Account, net_request::account::IncompleteAccountRequest),
-	Code(Code, net_request::contract_code::IncompleteCodeRequest),
-	Execution(TransactionProof, net_request::execution::IncompleteExecutionRequest),
-	Signal(Signal, net_request::epoch_signal::IncompleteSignalRequest)
+	HeaderProof(HeaderProof, net_request::header_proof::IncompleteRequest),
+	HeaderByHash(HeaderByHash, net_request::header::IncompleteRequest),
+	HeaderWithAncestors(HeaderWithAncestors, net_request::header::IncompleteRequest),
+	TransactionIndex(TransactionIndex, net_request::transaction_index::IncompleteRequest),
+	Receipts(BlockReceipts, net_request::block_receipts::IncompleteRequest),
+	Body(Body, net_request::block_body::IncompleteRequest),
+	Account(Account, net_request::account::IncompleteRequest),
+	Code(Code, net_request::contract_code::IncompleteRequest),
+	Execution(TransactionProof, net_request::execution::IncompleteRequest),
+	Signal(Signal, net_request::epoch_signal::IncompleteRequest)
 }
 
 impl From<Request> for CheckedRequest {
 	fn from(req: Request) -> Self {
 		match req {
 			Request::HeaderByHash(req) => {
-				let net_req = net_request::header::IncompleteHeadersRequest {
+				let net_req = net_request::header::IncompleteRequest {
 					start: req.0.map(Into::into),
 					skip: 0,
 					max: 1,
@@ -276,7 +276,7 @@ impl From<Request> for CheckedRequest {
 				CheckedRequest::HeaderByHash(req, net_req)
 			}
 			Request::HeaderWithAncestors(req) => {
-				let net_req = net_request::header::IncompleteHeadersRequest {
+				let net_req = net_request::header::IncompleteRequest {
 					start: req.block_hash.map(Into::into),
 					skip: 0,
 					max: req.ancestor_count + 1,
@@ -286,35 +286,35 @@ impl From<Request> for CheckedRequest {
 				CheckedRequest::HeaderWithAncestors(req, net_req)
 			}
 			Request::HeaderProof(req) => {
-				let net_req = net_request::header_proof::IncompleteHeaderProofRequest {
+				let net_req = net_request::header_proof::IncompleteRequest {
 					num: req.num().into(),
 				};
 				trace!(target: "on_demand", "HeaderProof Request, {:?}", net_req);
 				CheckedRequest::HeaderProof(req, net_req)
 			}
 			Request::TransactionIndex(req) => {
-				let net_req = net_request::transaction_index::IncompleteTransactionIndexRequest {
+				let net_req = net_request::transaction_index::IncompleteRequest {
 					hash: req.0,
 				};
 				trace!(target: "on_demand", "TransactionIndex Request, {:?}", net_req);
 				CheckedRequest::TransactionIndex(req, net_req)
 			}
 			Request::Body(req) => {
-				let net_req = net_request::block_body::IncompleteBodyRequest {
+				let net_req = net_request::block_body::IncompleteRequest {
 					hash: req.0.field(),
 				};
 				trace!(target: "on_demand", "Body Request, {:?}", net_req);
 				CheckedRequest::Body(req, net_req)
 			}
 			Request::Receipts(req) => {
-				let net_req = net_request::block_receipts::IncompleteReceiptsRequest {
+				let net_req = net_request::block_receipts::IncompleteRequest {
 					hash: req.0.field(),
 				};
 				trace!(target: "on_demand", "Receipt Request, {:?}", net_req);
 				CheckedRequest::Receipts(req, net_req)
 			}
 			Request::Account(req) => {
-				let net_req = net_request::account::IncompleteAccountRequest {
+				let net_req = net_request::account::IncompleteRequest {
 					block_hash: req.header.field(),
 					address_hash: ::hash::keccak(&req.address).into(),
 				};
@@ -322,7 +322,7 @@ impl From<Request> for CheckedRequest {
 				CheckedRequest::Account(req, net_req)
 			}
 			Request::Code(req) => {
-				let net_req = net_request::contract_code::IncompleteCodeRequest {
+				let net_req = net_request::contract_code::IncompleteRequest {
 					block_hash: req.header.field(),
 					code_hash: req.code_hash,
 				};
@@ -330,7 +330,7 @@ impl From<Request> for CheckedRequest {
 				CheckedRequest::Code(req, net_req)
 			}
 			Request::Execution(req) => {
-				let net_req = net_request::execution::IncompleteExecutionRequest {
+				let net_req = net_request::execution::IncompleteRequest {
 					block_hash: req.header.field(),
 					from: req.tx.sender(),
 					gas: req.tx.gas,
@@ -343,7 +343,7 @@ impl From<Request> for CheckedRequest {
 				CheckedRequest::Execution(req, net_req)
 			}
 			Request::Signal(req) => {
-				let net_req = net_request::epoch_signal::IncompleteSignalRequest {
+				let net_req = net_request::epoch_signal::IncompleteRequest {
 					block_hash: req.hash.into(),
 				};
 				trace!(target: "on_demand", "Signal Request, {:?}", net_req);
@@ -679,7 +679,7 @@ pub enum Response {
 	/// Response to a header-by-hash with ancestors request.
 	HeaderWithAncestors(Vec<encoded::Header>),
 	/// Response to a transaction-index request.
-	TransactionIndex(net_request::transaction_index::TransactionIndexResponse),
+	TransactionIndex(net_request::transaction_index::Response),
 	/// Response to a receipts request.
 	Receipts(Vec<Receipt>),
 	/// Response to a block body request.
@@ -913,8 +913,8 @@ impl TransactionIndex {
 	pub fn check_response(
 		&self,
 		_cache: &Mutex<::cache::Cache>,
-		res: &net_request::transaction_index::TransactionIndexResponse,
-	) -> Result<net_request::transaction_index::TransactionIndexResponse, Error> {
+		res: &net_request::transaction_index::Response,
+	) -> Result<net_request::transaction_index::Response, Error> {
 		Ok(res.clone())
 	}
 }

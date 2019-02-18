@@ -6,7 +6,7 @@ use rlp::{Encodable, Decodable, DecoderError, RlpStream, Rlp};
 
 /// Potentially incomplete headers request.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct IncompleteHeadersRequest {
+pub struct IncompleteRequest {
 	/// Start block.
 	pub start: Field<HashOrNumber>,
 	/// Skip between.
@@ -17,9 +17,9 @@ pub struct IncompleteHeadersRequest {
 	pub reverse: bool,
 }
 
-impl super::IncompleteRequest for IncompleteHeadersRequest {
-	type Complete = CompleteHeadersRequest;
-	type Response = HeadersResponse;
+impl super::IncompleteRequest for IncompleteRequest {
+	type Complete = CompleteRequest;
+	type Response = Response;
 
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), NoSuchOutput>
 	where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
@@ -44,7 +44,7 @@ impl super::IncompleteRequest for IncompleteHeadersRequest {
 	}
 
 	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
-		Ok(CompleteHeadersRequest {
+		Ok(CompleteRequest {
 			start: self.start.into_scalar()?,
 			skip: self.skip,
 			max: self.max,
@@ -59,7 +59,7 @@ impl super::IncompleteRequest for IncompleteHeadersRequest {
 
 /// A complete header request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompleteHeadersRequest {
+pub struct CompleteRequest {
 	/// Start block.
 	pub start: HashOrNumber,
 	/// Skip between.
@@ -72,17 +72,17 @@ pub struct CompleteHeadersRequest {
 
 /// The output of a request for headers.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HeadersResponse {
+pub struct Response {
 	/// The headers requested.
 	pub headers: Vec<encoded::Header>,
 }
 
-impl super::ResponseLike for HeadersResponse {
+impl super::ResponseLike for Response {
 	/// Fill reusable outputs by writing them into the function.
 	fn fill_outputs<F>(&self, _: F) where F: FnMut(usize, Output) { }
 }
 
-impl Decodable for HeadersResponse {
+impl Decodable for Response {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		use common_types::header::Header as FullHeader;
 
@@ -95,11 +95,11 @@ impl Decodable for HeadersResponse {
 			headers.push(encoded::Header::new(item.as_raw().to_owned()));
 		}
 
-		Ok(HeadersResponse { headers })
+		Ok(Response { headers })
 	}
 }
 
-impl Encodable for HeadersResponse {
+impl Encodable for Response {
 	fn rlp_append(&self, s: &mut RlpStream) {
 		s.begin_list(self.headers.len());
 		for header in &self.headers {

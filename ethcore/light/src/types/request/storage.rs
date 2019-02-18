@@ -6,7 +6,7 @@ use bytes::Bytes;
 
 /// Potentially incomplete request for an storage proof.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct IncompleteStorageRequest {
+pub struct IncompleteRequest {
 	/// Block hash to request state proof for.
 	pub block_hash: Field<H256>,
 	/// Hash of the account's address.
@@ -15,9 +15,9 @@ pub struct IncompleteStorageRequest {
 	pub key_hash: Field<H256>,
 }
 
-impl super::IncompleteRequest for IncompleteStorageRequest {
-	type Complete = CompleteStorageRequest;
-	type Response = StorageResponse;
+impl super::IncompleteRequest for IncompleteRequest {
+	type Complete = CompleteRequest;
+	type Response = Response;
 
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), NoSuchOutput>
 	where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
@@ -65,7 +65,7 @@ impl super::IncompleteRequest for IncompleteStorageRequest {
 	}
 
 	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
-		Ok(CompleteStorageRequest {
+		Ok(CompleteRequest {
 			block_hash: self.block_hash.into_scalar()?,
 			address_hash: self.address_hash.into_scalar()?,
 			key_hash: self.key_hash.into_scalar()?,
@@ -81,7 +81,7 @@ impl super::IncompleteRequest for IncompleteStorageRequest {
 
 /// A complete request for a storage proof.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompleteStorageRequest {
+pub struct CompleteRequest {
 	/// Block hash to request state proof for.
 	pub block_hash: H256,
 	/// Hash of the account's address.
@@ -92,14 +92,14 @@ pub struct CompleteStorageRequest {
 
 /// The output of a request for an account state proof.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct StorageResponse {
+pub struct Response {
 	/// Inclusion/exclusion proof
 	pub proof: Vec<Bytes>,
 	/// Storage value.
 	pub value: H256,
 }
 
-impl super::ResponseLike for StorageResponse {
+impl super::ResponseLike for Response {
 	/// Fill reusable outputs by providing them to the function.
 	fn fill_outputs<F>(&self, mut f: F) where F: FnMut(usize, Output) {
 		f(0, Output::Hash(self.value));

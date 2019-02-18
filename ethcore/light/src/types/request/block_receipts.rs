@@ -5,14 +5,14 @@ use ethereum_types::H256;
 
 /// Potentially incomplete block receipts request.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct IncompleteReceiptsRequest {
+pub struct IncompleteRequest {
 	/// Block hash to get receipts for.
 	pub hash: Field<H256>,
 }
 
-impl super::IncompleteRequest for IncompleteReceiptsRequest {
-	type Complete = CompleteReceiptsRequest;
-	type Response = ReceiptsResponse;
+impl super::IncompleteRequest for IncompleteRequest {
+	type Complete = CompleteRequest;
+	type Response = Response;
 
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), NoSuchOutput>
 	where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
@@ -35,7 +35,7 @@ impl super::IncompleteRequest for IncompleteReceiptsRequest {
 	}
 
 	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
-		Ok(CompleteReceiptsRequest {
+		Ok(CompleteRequest {
 			hash: self.hash.into_scalar()?,
 		})
 	}
@@ -47,19 +47,19 @@ impl super::IncompleteRequest for IncompleteReceiptsRequest {
 
 /// A complete block receipts request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompleteReceiptsRequest {
+pub struct CompleteRequest {
 	/// The number to get block receipts for.
 	pub hash: H256,
 }
 
 /// The output of a request for block receipts.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodableWrapper, RlpDecodableWrapper)]
-pub struct ReceiptsResponse {
+pub struct Response {
 	/// The block receipts.
 	pub receipts: Vec<Receipt>
 }
 
-impl super::ResponseLike for ReceiptsResponse {
+impl super::ResponseLike for Response {
 	/// Fill reusable outputs by providing them to the function.
 	fn fill_outputs<F>(&self, _: F) where F: FnMut(usize, Output) {}
 }

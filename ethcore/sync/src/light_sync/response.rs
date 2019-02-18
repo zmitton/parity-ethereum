@@ -18,7 +18,7 @@
 
 use types::{encoded, header::Header};
 use ethereum_types::H256;
-use light::request::{HashOrNumber, CompleteHeadersRequest as HeadersRequest};
+use light::request::{HashOrNumber, header::CompleteRequest as HeadersRequest};
 use rlp::DecoderError;
 use std::fmt;
 
@@ -155,7 +155,7 @@ impl Constraint for Max {
 mod tests {
 	use types::encoded;
 	use types::header::Header;
-	use light::request::CompleteHeadersRequest as HeadersRequest;
+	use light::request::header::CompleteRequest as HeadersRequest;
 
 	use super::*;
 

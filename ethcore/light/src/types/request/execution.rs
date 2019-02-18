@@ -8,7 +8,7 @@ use bytes::Bytes;
 
 /// Potentially incomplete execution proof request.
 #[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-pub struct IncompleteExecutionRequest {
+pub struct IncompleteRequest {
 	/// The block hash to request the state for.
 	pub block_hash: Field<H256>,
 	/// The address the transaction should be from.
@@ -25,9 +25,9 @@ pub struct IncompleteExecutionRequest {
 	pub data: Bytes,
 }
 
-impl super::IncompleteRequest for IncompleteExecutionRequest {
-	type Complete = CompleteExecutionRequest;
-	type Response = ExecutionResponse;
+impl super::IncompleteRequest for IncompleteRequest {
+	type Complete = CompleteRequest;
+	type Response = Response;
 
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), NoSuchOutput>
 	where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
@@ -50,7 +50,7 @@ impl super::IncompleteRequest for IncompleteExecutionRequest {
 		}
 	}
 	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
-		Ok(CompleteExecutionRequest {
+		Ok(CompleteRequest {
 			block_hash: self.block_hash.into_scalar()?,
 			from: self.from,
 			action: self.action,
@@ -68,7 +68,7 @@ impl super::IncompleteRequest for IncompleteExecutionRequest {
 
 /// A complete request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompleteExecutionRequest {
+pub struct CompleteRequest {
 	/// The block hash to request the state for.
 	pub block_hash: H256,
 	/// The address the transaction should be from.
@@ -87,17 +87,17 @@ pub struct CompleteExecutionRequest {
 
 /// The output of a request for proof of execution
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecutionResponse {
+pub struct Response {
 	/// All state items (trie nodes, code) necessary to re-prove the transaction.
 	pub items: Vec<DBValue>,
 }
 
-impl super::ResponseLike for ExecutionResponse {
+impl super::ResponseLike for Response {
 	/// Fill reusable outputs by providing them to the function.
 	fn fill_outputs<F>(&self, _: F) where F: FnMut(usize, Output) {}
 }
 
-impl Decodable for ExecutionResponse {
+impl Decodable for Response {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		let mut items = Vec::new();
 		for raw_item in rlp.iter() {
@@ -106,11 +106,11 @@ impl Decodable for ExecutionResponse {
 			items.push(item);
 		}
 
-		Ok(ExecutionResponse { items })
+		Ok(Response { items })
 	}
 }
 
-impl Encodable for ExecutionResponse {
+impl Encodable for Response {
 	fn rlp_append(&self, s: &mut RlpStream) {
 		s.begin_list(self.items.len());
 
