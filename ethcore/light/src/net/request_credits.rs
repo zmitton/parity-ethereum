@@ -26,7 +26,7 @@
 //! Current default costs are picked completely arbitrarily, not based
 //! on any empirical timings or mathematical models.
 
-use request::{self, Request};
+use super::request::{self, Request};
 use super::error::Error;
 
 use rlp::{Rlp, RlpStream, Decodable, Encodable, DecoderError};
@@ -240,7 +240,7 @@ impl FlowParams {
 		load_share: f64,
 		max_stored: Duration
 	) -> Self {
-		use request::Kind;
+		use self::request::Kind;
 
 		let load_share = load_share.abs();
 

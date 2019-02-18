@@ -25,10 +25,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 use std::time::{Duration, Instant};
 
-use request::Request;
-use request::NetworkRequests as Requests;
 use net::{timeout, ReqId};
 use ethereum_types::U256;
+
+use super::request::{Request, NetworkRequests as Requests};
 
 // Request set entry: requests + cost.
 #[derive(Debug)]

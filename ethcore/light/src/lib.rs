@@ -40,12 +40,10 @@ pub mod transaction_queue;
 pub mod cache;
 pub mod provider;
 
-mod types;
-
 pub use self::cache::Cache;
 pub use self::provider::{Provider, MAX_HEADERS_PER_REQUEST};
 pub use self::transaction_queue::TransactionQueue;
-pub use types::request as request;
+pub use net::request;
 
 #[macro_use]
 extern crate serde_derive;

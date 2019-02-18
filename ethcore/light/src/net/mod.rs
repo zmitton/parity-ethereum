@@ -25,7 +25,6 @@ use kvdb::DBValue;
 use network::{NetworkProtocolHandler, NetworkContext, PeerId};
 use parking_lot::{Mutex, RwLock};
 use provider::Provider;
-use request::{Request, NetworkRequests as Requests, Response};
 use rlp::{RlpStream, Rlp};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
@@ -38,6 +37,7 @@ use self::request_credits::{Credits, FlowParams};
 use self::context::{Ctx, TickCtx};
 use self::error::Punishment;
 use self::load_timer::{LoadDistribution, NullStore, MOVING_SAMPLE_SIZE};
+use self::request::{Request, NetworkRequests as Requests, Response};
 use self::request_set::RequestSet;
 use self::id_guard::IdGuard;
 
@@ -50,6 +50,7 @@ mod request_set;
 #[cfg(test)]
 mod tests;
 
+pub mod request;
 pub mod request_credits;
 
 pub use self::context::{BasicContext, EventContext, IoContext};
@@ -983,8 +984,8 @@ impl LightProtocol {
 		// the maximum amount of requests we'll fill in a single packet.
 		const MAX_REQUESTS: usize = 256;
 
-		use ::request::Builder;
-		use ::request::CompleteRequest;
+		use self::request::Builder;
+		use self::request::CompleteRequest;
 
 		let peers = self.peers.read();
 		let peer = match peers.get(&peer_id) {

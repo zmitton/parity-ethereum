@@ -34,12 +34,10 @@ use hashdb::HashDB;
 use kvdb::DBValue;
 use memorydb::MemoryDB;
 use parking_lot::Mutex;
-use request::{self as net_request, IncompleteRequest, CompleteRequest, Output, OutputKind, Field};
+use net::request::{self as net_request, IncompleteRequest, CompleteRequest, Output, OutputKind, Field};
 use rlp::{RlpStream, Rlp};
 use trie::Trie;
 use vm::EnvInfo;
-
-//use crate::types::request as net_request;
 
 const SUPPLIED_MATCHES: &str = "supplied responses always match produced requests; enforced by `check_response`; qed";
 
@@ -356,7 +354,7 @@ impl From<Request> for CheckedRequest {
 impl CheckedRequest {
 	/// Convert this into a network request.
 	pub fn into_net_request(self) -> net_request::Request {
-		use ::request::Request as NetRequest;
+		use net::request::Request as NetRequest;
 
 		match self {
 			CheckedRequest::HeaderProof(_, req) => NetRequest::HeaderProof(req),
@@ -620,7 +618,7 @@ impl net_request::CheckedRequest for CheckedRequest {
 
 	/// Check whether the response matches (beyond the type).
 	fn check_response(&self, complete: &Self::Complete, cache: &Mutex<::cache::Cache>, response: &Self::Response) -> Result<Response, Error> {
-		use ::request::Response as NetResponse;
+		use net::request::Response as NetResponse;
 
 		// helper for expecting a specific response for a given request.
 		macro_rules! expect {

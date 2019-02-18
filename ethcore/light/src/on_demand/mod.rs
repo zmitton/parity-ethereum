@@ -38,14 +38,14 @@ use net::{
 };
 
 use cache::Cache;
-use request::{self as basic_request, Request as NetworkRequest};
+use net::request::{self as basic_request, Request as NetworkRequest};
 use self::request::CheckedRequest;
 
 pub use self::request::{Request, Response, HeaderRef, Error as ValidityError};
 pub use self::request_guard::{RequestGuard, Error as RequestError};
 pub use self::response_guard::{ResponseGuard, Error as ResponseGuardError, Inner as ResponseGuardInner};
 
-pub use types::request::ResponseError;
+pub use net::request::ResponseError;
 
 #[cfg(test)]
 mod tests;
@@ -208,7 +208,7 @@ impl Pending {
 
 	// update the cached network requests.
 	fn update_net_requests(&mut self) {
-		use request::IncompleteRequest;
+		use net::request::IncompleteRequest;
 
 		let mut builder = basic_request::Builder::default();
 		let num_answered = self.requests.num_answered();
@@ -428,7 +428,7 @@ impl OnDemand {
 			return Ok(receiver);
 		}
 
-		let mut builder = basic_request::Builder::default();
+		let mut builder = super::net::request::Builder::default();
 
 		let responses = Vec::with_capacity(requests.len());
 

@@ -24,7 +24,8 @@ use std::time::{Duration, Instant};
 use std::collections::HashMap;
 use std::fmt;
 
-use super::{ResponseError, ValidityError};
+use super::ValidityError;
+use net::request::ResponseError;
 
 /// Response guard error type
 #[derive(Debug, Eq, PartialEq)]

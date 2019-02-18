@@ -29,7 +29,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use request::{CompleteRequest, Kind};
+use super::request::{CompleteRequest, Kind};
 
 use bincode;
 use parking_lot::{RwLock, Mutex};

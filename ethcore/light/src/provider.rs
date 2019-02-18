@@ -31,7 +31,7 @@ use cht::{self, BlockInfo};
 use client::{LightChainClient, AsLightClient};
 use transaction_queue::TransactionQueue;
 
-use request;
+use net::request;
 
 /// Maximum allowed size of a headers request.
 pub const MAX_HEADERS_PER_REQUEST: u64 = 512;
@@ -56,7 +56,7 @@ pub trait Provider: Send + Sync {
 	/// The returned vector may have any length in the range [0, `max`], but the
 	/// results within must adhere to the `skip` and `reverse` parameters.
 	fn block_headers(&self, req: request::header::CompleteRequest) -> Option<request::header::Response> {
-		use request::HashOrNumber;
+		use net::request::HashOrNumber;
 
 		if req.max == 0 { return None }
 

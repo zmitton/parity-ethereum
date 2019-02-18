@@ -20,7 +20,7 @@
 
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
-use request::{
+use net::request::{
 	IncompleteRequest, OutputKind, Output, NoSuchOutput, ResponseError, ResponseLike,
 };
 
