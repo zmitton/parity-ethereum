@@ -100,6 +100,9 @@ const MAX_ANCIENT_BLOCKS_QUEUE_SIZE: usize = 4096;
 const MAX_ANCIENT_BLOCKS_TO_IMPORT: usize = 4;
 const MAX_QUEUE_SIZE_TO_SLEEP_ON: usize = 2;
 const MIN_HISTORY_SIZE: u64 = 8;
+/// Maxmimum time taken by a Fast-Warp query (which can be really slow on
+/// single account iterations)
+const MAX_FAST_WARP_DURATION: Duration = Duration::from_secs(5);
 
 /// Report on the status of a client.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
@@ -1959,6 +1962,11 @@ impl BlockChainClient for Client {
 
 		rlps.begin_unbounded_list();
 
+		let start = Instant::now();
+		let duration_to_f64 = |d: Duration| {
+			d.as_secs() as f64 + (d.subsec_nanos() / 1_000_000) as f64 / 1_000.0
+		};
+
 		for item in account_iter {
 			// [ account_hash ; account_data ; account_storage ]
 			// 		where account_data = [ nonce ; balance ; storage_root ; (opt) code ]
@@ -1970,14 +1978,6 @@ impl BlockChainClient for Client {
 
 			let account: BasicAccount = ::rlp::decode(&*account_data)?;
 			let account_db = AccountDB::from_hash(state_db, account_hash);
-
-			let storage_db = TrieDB::new(&account_db, &account.storage_root)?;
-			let mut storage_db_iter = storage_db.iter()?;
-
-			if is_first {
-				storage_db_iter.seek(&storage_from)?;
-				is_first = false;
-			}
 
 			account_rlp.append(&account_hash);
 			total_bytes += 32;
@@ -2004,17 +2004,27 @@ impl BlockChainClient for Client {
 			// Account Storage
 			account_rlp.begin_unbounded_list();
 
-			loop {
-				match storage_db_iter.next() {
-					Some(value) => {
-						let (key, value) = value?;
-						account_rlp.begin_list(2);
-						account_rlp.append(&key).append(&&*value);
-						total_bytes += 64;
-					},
-					None => {
+			let storage_db = TrieDB::new(&account_db, &account.storage_root)?;
+			let mut storage_db_iter = storage_db.iter()?;
+
+			if is_first {
+				storage_db_iter.seek(&storage_from)?;
+				is_first = false;
+			}
+
+			let mut num_keys = 0;
+			for value in storage_db_iter {
+				let (key, value) = value?;
+				account_rlp.begin_list(2);
+				account_rlp.append(&key).append(&&*value);
+				total_bytes += 64;
+				num_keys += 1;
+
+				// Check for time every 1k iteration
+				if num_keys % 1_000 == 0 {
+					if start.elapsed() > MAX_FAST_WARP_DURATION {
 						break;
-					},
+					}
 				}
 
 				if total_bytes > MAX_SIZE {
@@ -2023,8 +2033,11 @@ impl BlockChainClient for Client {
 			}
 
 			account_rlp.complete_unbounded_list();
-
 			rlps.append_raw(&account_rlp.drain(), 1);
+
+			if start.elapsed() > MAX_FAST_WARP_DURATION {
+				break;
+			}
 
 			if total_bytes > MAX_SIZE {
 				break;

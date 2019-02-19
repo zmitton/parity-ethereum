@@ -577,7 +577,7 @@ impl SyncHandler {
 			return Ok(());
 		}
 
-		trace!(target: "sync", "{} -> FastWarpData", peer_id);
+		trace!(target: "sync", "{} -> FastWarpData ({} bytes)", peer_id, r.as_raw().len());
 		sync.fast_warp.process(peer_id, r);
 		Ok(())
 	}

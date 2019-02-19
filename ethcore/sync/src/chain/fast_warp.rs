@@ -81,7 +81,9 @@ impl StateDownloader {
 	/// Create a new State Downloader
 	pub fn new() -> Self {
 		StateDownloader {
-			next_account_from: H256::zero(),
+			// next_account_from: H256::zero(),
+			// Sensibly large account on Kovan
+			next_account_from: H256::from("0e84c7646acf8871fa5598a0dbce244b49fb9577e531ef260e21af123d279e9e"),
 			next_storage_from: H256::zero(),
 			last_account_hash: H256::zero(),
 			last_storage_key: H256::zero(),
