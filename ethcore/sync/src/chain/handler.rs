@@ -15,6 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use api::WARP_SYNC_PROTOCOL_ID;
+use blocks::{SyncHeader};
 use block_sync::{BlockDownloaderImportError as DownloaderImportError, DownloadAction};
 use bytes::Bytes;
 use ethcore::error::{Error as EthcoreError, ErrorKind as EthcoreErrorKind, ImportErrorKind, BlockError};
@@ -373,15 +374,53 @@ impl SyncHandler {
 		return Ok(());
 	}
 
+	fn on_peer_best_block_header(sync: &mut ChainSync, _io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
+		{
+			let peer = sync.peers.get_mut(&peer_id).expect("Is only called when peer is present in peers");
+			peer.asking = PeerAsking::Nothing;
+			let item_count = r.item_count()?;
+			if item_count != 1 {
+				trace!(target: "sync", "{}: Chain is too short to confirm the block", peer_id);
+				peer.confirmation = ForkConfirmation::TooShort;
+
+			} else {
+				let header = r.at(0)?.as_raw();
+				if keccak(&header) != peer.latest_hash {
+					trace!(target: "sync", "{}: Best Block mismatch", peer_id);
+					return Err(DownloaderImportError::Invalid);
+				}
+
+				let info = SyncHeader::from_rlp(header.to_vec())?;
+				let number = BlockNumber::from(info.header.number());
+
+				trace!(target: "sync", "{}: Got peer best block", peer_id);
+				peer.latest_number = Some(number);
+
+				// Update highest block number
+				if sync.highest_block.map_or(true, |highest_block| highest_block < number) {
+					sync.highest_block = Some(number);
+				}
+			}
+		}
+
+		return Ok(());
+	}
+
 	/// Called by peer once it has new block headers during sync
 	fn on_peer_block_headers(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
 		let is_fork_header_request = match sync.peers.get(&peer_id) {
 			Some(peer) if peer.asking == PeerAsking::ForkHeader => true,
 			_ => false,
 		};
-
 		if is_fork_header_request {
 			return SyncHandler::on_peer_fork_header(sync, io, peer_id, r);
+		}
+		let is_best_block_header_request = match sync.peers.get(&peer_id) {
+			Some(peer) if peer.asking == PeerAsking::BestBlockHeader => true,
+			_ => false,
+		};
+		if is_best_block_header_request {
+			return SyncHandler::on_peer_best_block_header(sync, io, peer_id, r);
 		}
 
 		sync.clear_peer_download(peer_id);
@@ -634,6 +673,7 @@ impl SyncHandler {
 			network_id: r.val_at(1)?,
 			difficulty: Some(r.val_at(2)?),
 			latest_hash: r.val_at(3)?,
+			latest_number: None,
 			genesis: r.val_at(4)?,
 			asking: PeerAsking::Nothing,
 			asking_blocks: Vec::new(),

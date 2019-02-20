@@ -81,6 +81,17 @@ impl SyncRequester {
 		SyncRequester::send_request(sync, io, peer_id, PeerAsking::ForkHeader, GET_BLOCK_HEADERS_PACKET, rlp.out());
 	}
 
+	/// Request best block header from a peer by block hash
+	pub fn request_best_block_header(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, h: H256) {
+		trace!(target: "sync", "{} <- GetBestBlockHeader: {:#?}", peer_id, h);
+		let mut rlp = RlpStream::new_list(4);
+		rlp.append(&h);
+		rlp.append(&1u32);
+		rlp.append(&0u32);
+		rlp.append(&0u32);
+		SyncRequester::send_request(sync, io, peer_id, PeerAsking::BestBlockHeader, GET_BLOCK_HEADERS_PACKET, rlp.out());
+	}
+
 	/// Find some headers or blocks to download for a peer.
 	pub fn request_snapshot_data(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId) {
 		// find chunk data to download

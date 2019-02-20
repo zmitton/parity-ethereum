@@ -289,6 +289,7 @@ impl SyncStatus {
 pub enum PeerAsking {
 	Nothing,
 	ForkHeader,
+	BestBlockHeader,
 	BlockHeaders,
 	BlockBodies,
 	BlockReceipts,
@@ -329,6 +330,8 @@ pub struct PeerInfo {
 	network_id: u64,
 	/// Peer best block hash
 	latest_hash: H256,
+	/// Peer best block number
+	latest_number: Option<BlockNumber>,
 	/// Peer total difficulty if known
 	difficulty: Option<U256>,
 	/// Type of data currenty being requested from peer.
@@ -959,6 +962,21 @@ impl ChainSync {
 				return;
 			}
 		};
+
+		{
+			let maybe_ask_latest_hash = self.peers.get(&peer_id).and_then(|peer| {
+				if peer.latest_number.is_none() {
+					Some(peer.latest_hash)
+				} else {
+					None
+				}
+			});
+			if let Some(latest_hash) = maybe_ask_latest_hash {
+				SyncRequester::request_best_block_header(self, io, peer_id, latest_hash);
+				return;
+			}
+		}
+
 		let chain_info = io.chain().chain_info();
 		let syncing_difficulty = chain_info.pending_total_difficulty;
 		let num_active_peers = self.peers.values().filter(|p| p.asking != PeerAsking::Nothing).count();
@@ -1209,7 +1227,7 @@ impl ChainSync {
 				PeerAsking::BlockBodies => elapsed > BODIES_TIMEOUT,
 				PeerAsking::BlockReceipts => elapsed > RECEIPTS_TIMEOUT,
 				PeerAsking::Nothing => false,
-				PeerAsking::ForkHeader => elapsed > FORK_HEADER_TIMEOUT,
+				PeerAsking::ForkHeader | PeerAsking::BestBlockHeader => elapsed > FORK_HEADER_TIMEOUT,
 				PeerAsking::SnapshotManifest => elapsed > SNAPSHOT_MANIFEST_TIMEOUT,
 				PeerAsking::SnapshotData => elapsed > SNAPSHOT_DATA_TIMEOUT,
 				PeerAsking::FastWarpData => elapsed > FAST_WARP_DATA_TIMEOUT,

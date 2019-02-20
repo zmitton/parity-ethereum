@@ -35,9 +35,8 @@ use trie::{TrieMut, NibbleSlice, NodeCodec, node::Node};
 use types::basic_account::BasicAccount;
 use types::BlockNumber;
 use types::blockchain_info::BlockChainInfo;
-use types::ids::BlockId;
 
-use super::{ChainSync, BlockSet};
+use super::{BlockSet};
 
 #[derive(Debug, Clone)]
 pub enum NodeDataRequest {
