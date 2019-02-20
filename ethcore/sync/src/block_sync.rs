@@ -138,12 +138,14 @@ pub struct BlockDownloader {
 	retract_step: u64,
 	/// consecutive useless headers this round
 	useless_headers_count: usize,
+	/// Whether it's a FastWarp sync
+	fast_warp: bool,
 }
 
 impl BlockDownloader {
 	/// Create a new instance of syncing strategy.
 	/// For BlockSet::NewBlocks this won't reorganize to before the last kept state.
-	pub fn new(block_set: BlockSet, start_hash: &H256, start_number: BlockNumber) -> Self {
+	pub fn new(block_set: BlockSet, start_hash: &H256, start_number: BlockNumber, fast_warp: bool) -> Self {
 		let sync_receipts = match block_set {
 			BlockSet::NewBlocks => false,
 			BlockSet::OldBlocks | BlockSet::FastWarpBlocks => true,
@@ -163,6 +165,7 @@ impl BlockDownloader {
 			target_hash: None,
 			retract_step: 1,
 			useless_headers_count: 0,
+			fast_warp,
 		}
 	}
 
@@ -539,7 +542,12 @@ impl BlockDownloader {
 			}
 
 			let result = if let Some(receipts) = receipts {
-				io.chain().queue_ancient_block(block, receipts)
+				let (is_best, is_ancient) = if self.fast_warp {
+					(true, false)
+				} else {
+					(false, true)
+				};
+				io.chain().queue_ancient_block(block, receipts, is_best, is_ancient)
 			} else {
 				io.chain().import_block(block)
 			};

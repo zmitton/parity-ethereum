@@ -130,7 +130,7 @@ impl SyncHandler {
 					.next().is_none();
 
 				if still_asking_manifest {
-					sync.state = ChainSync::get_init_state(sync.warp_sync, io.chain());
+					sync.state = ChainSync::get_init_state(sync.warp_sync, io.chain(), &sync.fast_warp);
 				}
 			}
 			sync.continue_sync(io);
@@ -626,7 +626,7 @@ impl SyncHandler {
 		Ok(())
 	}
 
-	fn on_fast_warp_data(sync: &mut ChainSync, _io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
+	fn on_fast_warp_data(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
 		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
 			trace!(target: "sync", "Ignoring snapshot data from unconfirmed peer {}", peer_id);
 			return Ok(());
@@ -638,12 +638,12 @@ impl SyncHandler {
 		}
 
 		trace!(target: "sync", "{} -> FastWarpData ({} bytes)", peer_id, r.as_raw().len());
-		sync.fast_warp.process(peer_id, r);
+		sync.fast_warp.process(io, peer_id, r);
 		Ok(())
 	}
 
 	/// Called when NodeData is received from a peer
-	fn on_node_data(sync: &mut ChainSync, _io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
+	fn on_node_data(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
 		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
 			trace!(target: "sync", "Ignoring snapshot data from unconfirmed peer {}", peer_id);
 			return Ok(());
@@ -657,7 +657,7 @@ impl SyncHandler {
 		let item_count = r.item_count().unwrap_or(0);
 		trace!(target: "sync", "{} -> NodeData ({} entries)", peer_id, item_count);
 
-		sync.fast_warp.process(peer_id, r);
+		sync.fast_warp.process(io, peer_id, r);
 		Ok(())
 	}
 

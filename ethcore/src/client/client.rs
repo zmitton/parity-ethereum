@@ -456,7 +456,7 @@ impl Importer {
 	///
 	/// The block is guaranteed to be the next best blocks in the
 	/// first block sequence. Does no sealing or transaction validation.
-	fn import_old_block(&self, unverified: Unverified, receipts_bytes: &[u8], db: &KeyValueDB, chain: &BlockChain) -> EthcoreResult<()> {
+	fn import_old_block(&self, unverified: Unverified, receipts_bytes: &[u8], db: &KeyValueDB, chain: &BlockChain, is_best: bool, is_ancient: bool) -> EthcoreResult<()> {
 		let receipts = ::rlp::decode_list(receipts_bytes);
 		let _import_lock = self.import_lock.lock();
 
@@ -468,7 +468,7 @@ impl Importer {
 
 			// Commit results
 			let mut batch = DBTransaction::new();
-			chain.insert_unordered_block(&mut batch, encoded::Block::new(unverified.bytes), receipts, None, false, true);
+			chain.insert_unordered_block(&mut batch, encoded::Block::new(unverified.bytes), receipts, None, is_best, is_ancient);
 			// Final commit to the DB
 			db.write_buffered(batch);
 			chain.commit();
@@ -2293,6 +2293,10 @@ impl BlockChainClient for Client {
 	fn registrar_address(&self) -> Option<Address> {
 		self.registrar_address.clone()
 	}
+
+	fn journal_db(&self) -> Box<journaldb::JournalDB> {
+		self.state_db.read().journal_db().boxed_clone()
+	}
 }
 
 impl IoClient for Client {
@@ -2317,7 +2321,7 @@ impl IoClient for Client {
 		});
 	}
 
-	fn queue_ancient_block(&self, unverified: Unverified, receipts_bytes: Bytes) -> EthcoreResult<H256> {
+	fn queue_ancient_block(&self, unverified: Unverified, receipts_bytes: Bytes, is_best: bool, is_ancient: bool) -> EthcoreResult<H256> {
 		trace_time!("queue_ancient_block");
 
 		let hash = unverified.hash();
@@ -2358,6 +2362,8 @@ impl IoClient for Client {
 						&receipts_bytes,
 						&**client.db.read().key_value(),
 						&*client.chain.read(),
+						is_best,
+						is_ancient,
 					);
 					if let Err(e) = result {
 						error!(target: "client", "Error importing ancient block: {}", e);

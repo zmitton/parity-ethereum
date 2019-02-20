@@ -15,19 +15,17 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 use std::collections::{HashSet, HashMap};
 use std::iter::FromIterator;
-use std::path::PathBuf;
 use std::time::Instant;
 
 // use ethcore_blockchain::{BlockChainDB};
 use block_sync::{BlockDownloader, BlockRequest};
 use bytes::Bytes;
-use db_utils::open_db_default;
 use ethcore::account_db::{AccountDBMut};
 use ethereum_types::{H256, U256};
 use ethtrie::{TrieDBMut, RlpCodec};
 use hash::{KECCAK_EMPTY, KECCAK_NULL_RLP};
 use hashdb::HashDB;
-use journaldb::{self, JournalDB, Algorithm};
+use journaldb::JournalDB;
 use network::{PeerId};
 use rlp::{Rlp, Prototype};
 use sync_io::SyncIo;
@@ -282,9 +280,8 @@ pub struct TrieDownloader {
 
 impl TrieDownloader {
 	/// Create a new Trie Downloader, targeting the given state root
-	pub fn new() -> Self {
-		let target = H256::from("ede59f09653d37777e197c0a816f90114f308ba6042eab1b6bf7ce2e2a24a487");
-
+	pub fn new(target: H256) -> Self {
+		trace!(target: "fast-warp", "Starting Trie-Dl with target={:#?}", target);
 		let mut node_data_requests = HashMap::new();
 
 		// First, query the head of the state tree
@@ -602,26 +599,23 @@ pub struct FastWarp {
 	state: FastWarpState,
 	// Current state root
 	state_root: H256,
-	// Journal DB handle
-	db: Box<JournalDB>,
 }
 
 impl FastWarp {
 	pub fn new(chain_info: &BlockChainInfo) -> std::io::Result<FastWarp> {
-		let db = open_db_default(&FastWarp::db_path())?;
-		let kvdb = db.key_value().clone();
-		let db = journaldb::new(kvdb, Algorithm::OverlayRecent, ::ethcore_db::COL_STATE);
-		let block_dl = BlockDownloader::new(BlockSet::FastWarpBlocks, &chain_info.best_block_hash, chain_info.best_block_number);
+		let block_dl = BlockDownloader::new(BlockSet::FastWarpBlocks, &chain_info.best_block_hash, chain_info.best_block_number, true);
 
 		Ok(FastWarp {
 			state: FastWarpState::BlockSync(block_dl),
 			state_root: KECCAK_NULL_RLP,
-			db,
 		})
 	}
 
-	fn db_path() -> PathBuf {
-		PathBuf::from("/tmp/fast-warp")
+	pub fn is_done(&self) -> bool {
+		match self.state {
+			FastWarpState::Done => true,
+			_ => false,
+		}
 	}
 
 	pub fn blocks_downloader(&mut self) -> Option<&mut BlockDownloader> {
@@ -632,28 +626,33 @@ impl FastWarp {
 	}
 
 	/// Process incoming packet
-	pub fn process(&mut self, peer_id: PeerId, r: &Rlp) {
+	pub fn process(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) {
+		let mut db = io.chain().journal_db();
 		let next_state = match self.state {
 			FastWarpState::BlockSync(ref mut _block_dl) => {
 				trace!(target: "fast-warp", "Invalid packet with state: BlockSync");
 				None
 			},
 			FastWarpState::StateSync(ref mut state_dl) => {
-				let action = state_dl.process(r, &mut self.db, &mut self.state_root);
+				let action = state_dl.process(r, &mut db, &mut self.state_root);
 
 				match action {
 					FastWarpAction::NextStep => {
-						Some(FastWarpState::TrieSync(TrieDownloader::new()))
+						let target = io.chain().chain_info().best_block_hash;
+						Some(FastWarpState::TrieSync(TrieDownloader::new(target)))
 					},
 					FastWarpAction::Continue => None,
 					FastWarpAction::Error => Some(FastWarpState::Error),
 				}
 			},
 			FastWarpState::TrieSync(ref mut trie_dl) => {
-				let action = trie_dl.process(peer_id, r, &mut self.db, &mut self.state_root);
+				let action = trie_dl.process(peer_id, r, &mut db, &mut self.state_root);
 
 				match action {
 					FastWarpAction::NextStep => {
+						let block_number = io.chain().chain_info().best_block_number;
+						let block_hash = io.chain().chain_info().best_block_hash;
+						FastWarp::finalize(&mut db, block_number, block_hash);
 						Some(FastWarpState::Done)
 					},
 					FastWarpAction::Continue => None,
@@ -690,7 +689,8 @@ impl FastWarp {
 				// 	}.unwrap();
 				// 	block_dl.last_imported_block_number()
 				// };
-				let latest_bn = io.chain().chain_info().ancient_block_number.unwrap_or(0);
+				// let latest_bn = io.chain().chain_info().ancient_block_number.unwrap_or(0);
+				let latest_bn = io.chain().chain_info().best_block_number;
 				let bn_delta = highest_block.map(|bn| {
 					if bn > latest_bn {
 						bn - latest_bn
@@ -700,7 +700,7 @@ impl FastWarp {
 				}).unwrap_or(1_000_000);
 
 				info!(target: "fast-warp", "Blocks-delta: {} ; Latest-block: {}", bn_delta, latest_bn);
-				if bn_delta <= 30_000 {
+				if bn_delta <= 3_000 {
 					info!(target: "fast-warp", "Less than 30_000 blocks from tip. Syncing state.");
 					self.state = FastWarpState::StateSync(StateDownloader::new());
 					self.request(io, peer_id, highest_block)

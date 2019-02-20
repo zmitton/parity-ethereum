@@ -592,8 +592,8 @@ impl ChainSync {
 		peers
 	}
 
-	fn get_init_state(warp_sync: WarpSync, chain: &BlockChainClient) -> SyncState {
-		if ::std::env::var("FAST").is_ok() {
+	fn get_init_state(warp_sync: WarpSync, chain: &BlockChainClient, fast_warp: &FastWarp) -> SyncState {
+		if ::std::env::var("FAST").is_ok() && !fast_warp.is_done() {
 			return SyncState::FastWarp;
 		}
 
@@ -665,7 +665,8 @@ impl ChainSync {
 	) -> Self {
 		let chain_info = chain.chain_info();
 		let best_block = chain.chain_info().best_block_number;
-		let state = Self::get_init_state(config.warp_sync, chain);
+		let fast_warp = FastWarp::new(&chain_info).expect("Couldn't create FastWarp");
+		let state = Self::get_init_state(config.warp_sync, chain, &fast_warp);
 
 		let mut sync = ChainSync {
 			state,
@@ -674,7 +675,7 @@ impl ChainSync {
 			peers: HashMap::new(),
 			handshaking_peers: HashMap::new(),
 			active_peers: HashSet::new(),
-			new_blocks: BlockDownloader::new(BlockSet::NewBlocks, &chain_info.best_block_hash, chain_info.best_block_number),
+			new_blocks: BlockDownloader::new(BlockSet::NewBlocks, &chain_info.best_block_hash, chain_info.best_block_number, false),
 			old_blocks: None,
 			last_sent_block_number: 0,
 			network_id: config.network_id,
@@ -685,7 +686,7 @@ impl ChainSync {
 			transactions_stats: TransactionsStats::default(),
 			private_tx_handler,
 			warp_sync: config.warp_sync,
-			fast_warp: FastWarp::new(&chain_info).expect("Couldn't create FastWarp"),
+			fast_warp,
 		};
 
 		sync.update_targets(chain);
@@ -759,7 +760,7 @@ impl ChainSync {
 				}
 			}
 		}
-		self.state = state.unwrap_or_else(|| Self::get_init_state(self.warp_sync, io.chain()));
+		self.state = state.unwrap_or_else(|| Self::get_init_state(self.warp_sync, io.chain(), &self.fast_warp));
 		// Reactivate peers only if some progress has been made
 		// since the last sync round of if starting fresh.
 		self.active_peers = self.peers.keys().cloned().collect();
@@ -876,13 +877,13 @@ impl ChainSync {
 	pub fn update_targets(&mut self, chain: &BlockChainClient) {
 		// Do not assume that the block queue/chain still has our last_imported_block
 		let chain = chain.chain_info();
-		self.new_blocks = BlockDownloader::new(BlockSet::NewBlocks, &chain.best_block_hash, chain.best_block_number);
+		self.new_blocks = BlockDownloader::new(BlockSet::NewBlocks, &chain.best_block_hash, chain.best_block_number, false);
 		self.old_blocks = None;
 		if self.download_old_blocks {
 			if let (Some(ancient_block_hash), Some(ancient_block_number)) = (chain.ancient_block_hash, chain.ancient_block_number) {
 
 				trace!(target: "sync", "Downloading old blocks from {:?} (#{}) till {:?} (#{:?})", ancient_block_hash, ancient_block_number, chain.first_block_hash, chain.first_block_number);
-				let mut downloader = BlockDownloader::new(BlockSet::OldBlocks, &ancient_block_hash, ancient_block_number);
+				let mut downloader = BlockDownloader::new(BlockSet::OldBlocks, &ancient_block_hash, ancient_block_number, false);
 				if let Some(hash) = chain.first_block_hash {
 					trace!(target: "sync", "Downloader target set to {:?}", hash);
 					downloader.set_target(&hash);
@@ -1350,6 +1351,14 @@ impl ChainSync {
 					},
 				}
 			}
+		}
+
+		// Restart the sync when FastWarp is done
+		match self.state {
+			SyncState::FastWarp if self.fast_warp.is_done() => {
+				self.restart(io);
+			},
+			_ => (),
 		}
 
 		self.maybe_start_snapshot_sync(io);

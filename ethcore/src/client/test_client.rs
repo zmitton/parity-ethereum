@@ -895,6 +895,10 @@ impl BlockChainClient for TestBlockChainClient {
 	}
 
 	fn registrar_address(&self) -> Option<Address> { None }
+
+	fn journal_db(&self) -> Box<journaldb::JournalDB> {
+		panic!("Not implemented");
+	}
 }
 
 impl IoClient for TestBlockChainClient {
@@ -904,7 +908,7 @@ impl IoClient for TestBlockChainClient {
 		self.miner.import_external_transactions(self, txs);
 	}
 
-	fn queue_ancient_block(&self, unverified: Unverified, _r: Bytes) -> EthcoreResult<H256> {
+	fn queue_ancient_block(&self, unverified: Unverified, _r: Bytes, _is_best: bool, _is_ancient: bool) -> EthcoreResult<H256> {
 		self.import_block(unverified)
 	}
 

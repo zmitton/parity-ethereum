@@ -24,6 +24,7 @@ use ethcore_miner::pool::VerifiedTransaction;
 use ethereum_types::{H256, U256, Address};
 use evm::Schedule;
 use itertools::Itertools;
+use journaldb::JournalDB;
 use kvdb::DBValue;
 use types::transaction::{self, LocalizedTransaction, SignedTransaction};
 use types::BlockNumber;
@@ -193,7 +194,7 @@ pub trait IoClient: Sync + Send {
 	fn queue_transactions(&self, transactions: Vec<Bytes>, peer_id: usize);
 
 	/// Queue block import with transaction receipts. Does no sealing and transaction validation.
-	fn queue_ancient_block(&self, block_bytes: Unverified, receipts_bytes: Bytes) -> EthcoreResult<H256>;
+	fn queue_ancient_block(&self, block_bytes: Unverified, receipts_bytes: Bytes, is_best: bool, is_ancient: bool) -> EthcoreResult<H256>;
 
 	/// Queue conensus engine message.
 	fn queue_consensus_message(&self, message: Bytes);
@@ -383,6 +384,9 @@ pub trait BlockChainClient : Sync + Send + AccountData + BlockChain + CallContra
 
 	/// Get the address of the registry itself.
 	fn registrar_address(&self) -> Option<Address>;
+
+	/// Get a Box underlaying JournalDB
+	fn journal_db(&self) -> Box<JournalDB>;
 }
 
 /// Provides `reopen_block` method
