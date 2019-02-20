@@ -305,6 +305,8 @@ pub enum BlockSet {
 	NewBlocks,
 	/// Missing old blocks
 	OldBlocks,
+	/// Blocks downloaded for Fast-Warp
+	FastWarpBlocks,
 }
 #[derive(Clone, Eq, PartialEq)]
 pub enum ForkConfirmation {
@@ -680,7 +682,7 @@ impl ChainSync {
 			transactions_stats: TransactionsStats::default(),
 			private_tx_handler,
 			warp_sync: config.warp_sync,
-			fast_warp: FastWarp::new().expect("Couldn't create FastWarp"),
+			fast_warp: FastWarp::new(&chain_info).expect("Couldn't create FastWarp"),
 		};
 
 		sync.update_targets(chain);
@@ -975,8 +977,11 @@ impl ChainSync {
 					self.maybe_start_snapshot_sync(io);
 				},
 				SyncState::FastWarp => {
-					if let Some(request) = self.fast_warp.request(peer_id) {
+					if let Some(request) = self.fast_warp.request(io, peer_id, self.highest_block) {
 						match request {
+							FastWarpRequest::BlockSync(request) => {
+								SyncRequester::request_blocks(self, io, peer_id, request, BlockSet::FastWarpBlocks);
+							},
 							FastWarpRequest::NodeData(hashes) => {
 								SyncRequester::request_node_data(self, io, peer_id, hashes);
 							},
@@ -1122,7 +1127,21 @@ impl ChainSync {
 					trace!(target: "sync", "Background block download is complete");
 					self.old_blocks = None;
 				}
-			}
+			},
+			BlockSet::FastWarpBlocks => {
+				let mut download_action = DownloadAction::None;
+				if let Some(downloader) = self.fast_warp.blocks_downloader() {
+					download_action = downloader.collect_blocks(io, false);
+
+					if download_action == DownloadAction::Reset {
+						downloader.reset();
+					}
+				}
+
+				if download_action == DownloadAction::Reset {
+					self.reset_downloads(block_set);
+				}
+			},
 		};
 	}
 

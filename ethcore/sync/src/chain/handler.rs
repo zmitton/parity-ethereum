@@ -318,7 +318,14 @@ impl SyncHandler {
 							return Ok(());
 						},
 						Some(ref mut blocks) => blocks,
-					}
+					},
+					BlockSet::FastWarpBlocks => match sync.fast_warp.blocks_downloader() {
+						None => {
+							trace!(target: "sync", "Ignored fast-warp block headers while block download is inactive");
+							return Ok(());
+						},
+						Some(blocks) => blocks,
+					},
 				};
 				downloader.import_bodies(r, expected_blocks.as_slice())?;
 			}
@@ -420,7 +427,14 @@ impl SyncHandler {
 						},
 						Some(ref mut blocks) => blocks,
 					}
-				}
+				},
+				BlockSet::FastWarpBlocks => match sync.fast_warp.blocks_downloader() {
+					None => {
+						trace!(target: "sync", "Ignored fast-warp block headers while block download is inactive");
+						return Ok(());
+					},
+					Some(blocks) => blocks,
+				},
 			};
 			downloader.import_headers(io, r, expected_hash)?
 		};
@@ -466,7 +480,14 @@ impl SyncHandler {
 							return Ok(());
 						},
 						Some(ref mut blocks) => blocks,
-					}
+					},
+					BlockSet::FastWarpBlocks => match sync.fast_warp.blocks_downloader() {
+						None => {
+							trace!(target: "sync", "Ignored fast-warp block headers while block download is inactive");
+							return Ok(());
+						},
+						Some(blocks) => blocks,
+					},
 				};
 				downloader.import_receipts(r, expected_blocks.as_slice())?;
 			}

@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 // use ethcore_blockchain::{BlockChainDB};
-// use block_sync::{BlockDownloader};
+use block_sync::{BlockDownloader, BlockRequest};
 use bytes::Bytes;
 use db_utils::open_db_default;
 use ethcore::account_db::{AccountDBMut};
@@ -30,8 +30,14 @@ use hashdb::HashDB;
 use journaldb::{self, JournalDB, Algorithm};
 use network::{PeerId};
 use rlp::{Rlp, Prototype};
+use sync_io::SyncIo;
 use trie::{TrieMut, NibbleSlice, NodeCodec, node::Node};
 use types::basic_account::BasicAccount;
+use types::BlockNumber;
+use types::blockchain_info::BlockChainInfo;
+use types::ids::BlockId;
+
+use super::{ChainSync, BlockSet};
 
 #[derive(Debug, Clone)]
 pub enum NodeDataRequest {
@@ -57,10 +63,28 @@ pub enum FastWarpAction {
 
 /// Available requests for Fast Warp
 pub enum FastWarpRequest {
+	/// Retrieve some block data
+	BlockSync(BlockRequest),
 	/// Get a fast-warp chunk from a peer
 	FastWarpData(H256, H256),
 	/// Get a sub-trie from a peer
 	NodeData(Vec<H256>),
+}
+
+/// State of the Fast-Warp sync
+pub enum FastWarpState {
+	/// Sync is waiting for something (more peers, queue was full, etc.)
+	Idle,
+	/// Syncing the block headers from peers
+	BlockSync(BlockDownloader),
+	/// Syncing the state with FastWarp requests
+	StateSync(StateDownloader),
+	/// Filling the state trie with NodeData requests
+	TrieSync(TrieDownloader),
+	/// An error occured during the sync
+	Error,
+	/// Sync is finished
+	Done,
 }
 
 /// State Downloader for the fast-warp protocol
@@ -574,22 +598,6 @@ impl TrieDownloader {
 	}
 }
 
-/// State of the Fast-Warp sync
-pub enum FastWarpState {
-	/// Sync is waiting for something (more peers, queue was full, etc.)
-	Idle,
-	/// Syncing the block headers from peers
-	// BlockSync(BlockDownloader),
-	/// Syncing the state with FastWarp requests
-	StateSync(StateDownloader),
-	/// Filling the state trie with NodeData requests
-	TrieSync(TrieDownloader),
-	/// An error occured during the sync
-	Error,
-	/// Sync is finished
-	Done,
-}
-
 pub struct FastWarp {
 	/// State of the fast-warp sync
 	state: FastWarpState,
@@ -600,13 +608,14 @@ pub struct FastWarp {
 }
 
 impl FastWarp {
-	pub fn new() -> std::io::Result<FastWarp> {
+	pub fn new(chain_info: &BlockChainInfo) -> std::io::Result<FastWarp> {
 		let db = open_db_default(&FastWarp::db_path())?;
 		let kvdb = db.key_value().clone();
 		let db = journaldb::new(kvdb, Algorithm::OverlayRecent, ::ethcore_db::COL_STATE);
+		let block_dl = BlockDownloader::new(BlockSet::FastWarpBlocks, &chain_info.best_block_hash, chain_info.best_block_number);
 
 		Ok(FastWarp {
-			state: FastWarpState::StateSync(StateDownloader::new()),
+			state: FastWarpState::BlockSync(block_dl),
 			state_root: KECCAK_NULL_RLP,
 			db,
 		})
@@ -616,9 +625,20 @@ impl FastWarp {
 		PathBuf::from("/tmp/fast-warp")
 	}
 
+	pub fn blocks_downloader(&mut self) -> Option<&mut BlockDownloader> {
+		match self.state {
+			FastWarpState::BlockSync(ref mut block_dl) => Some(block_dl),
+			_ => None,
+		}
+	}
+
 	/// Process incoming packet
 	pub fn process(&mut self, peer_id: PeerId, r: &Rlp) {
 		let next_state = match self.state {
+			FastWarpState::BlockSync(ref mut _block_dl) => {
+				trace!(target: "fast-warp", "Invalid packet with state: BlockSync");
+				None
+			},
 			FastWarpState::StateSync(ref mut state_dl) => {
 				let action = state_dl.process(r, &mut self.db, &mut self.state_root);
 
@@ -661,15 +681,45 @@ impl FastWarp {
 	}
 
 	/// Request to the given Peer
-	pub fn request(&mut self, peer_id: PeerId) -> Option<FastWarpRequest> {
+	pub fn request(&mut self, io: &mut SyncIo, peer_id: PeerId, highest_block: Option<BlockNumber>) -> Option<FastWarpRequest> {
 		match self.state {
+			FastWarpState::BlockSync(_) => {
+				// let latest_bn = {
+				// 	let block_dl = match self.state {
+				// 		FastWarpState::BlockSync(ref block_dl) => Some(block_dl),
+				// 		_ => None,
+				// 	}.unwrap();
+				// 	block_dl.last_imported_block_number()
+				// };
+				let latest_bn = io.chain().chain_info().ancient_block_number.unwrap_or(0);
+				let bn_delta = highest_block.map(|bn| {
+					if bn > latest_bn {
+						bn - latest_bn
+					} else {
+						0
+					}
+				}).unwrap_or(1_000_000);
+
+				info!(target: "fast-warp", "Blocks-delta: {} ; Latest-block: {}", bn_delta, latest_bn);
+				if bn_delta <= 30_000 {
+					info!(target: "fast-warp", "Less than 30_000 blocks from tip. Syncing state.");
+					self.state = FastWarpState::StateSync(StateDownloader::new());
+					self.request(io, peer_id, highest_block)
+				} else {
+					let block_dl = match self.state {
+						FastWarpState::BlockSync(ref mut block_dl) => Some(block_dl),
+						_ => None,
+					}.unwrap();
+					block_dl.request_blocks(io, 0).map(|req| FastWarpRequest::BlockSync(req))
+				}
+			},
 			FastWarpState::StateSync(ref mut state_dl) => {
 				Some(state_dl.request(peer_id))
 			},
 			FastWarpState::TrieSync(ref mut trie_dl) => {
 				Some(trie_dl.request(peer_id))
 			},
-			_ => {
+			FastWarpState::Done | FastWarpState::Error | FastWarpState::Idle => {
 				trace!(target: "fast-warp", "Invalid state for request.");
 				None
 			},

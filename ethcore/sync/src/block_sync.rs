@@ -146,7 +146,7 @@ impl BlockDownloader {
 	pub fn new(block_set: BlockSet, start_hash: &H256, start_number: BlockNumber) -> Self {
 		let sync_receipts = match block_set {
 			BlockSet::NewBlocks => false,
-			BlockSet::OldBlocks => true
+			BlockSet::OldBlocks | BlockSet::FastWarpBlocks => true,
 		};
 		BlockDownloader {
 			block_set,
