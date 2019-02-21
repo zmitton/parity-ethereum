@@ -672,7 +672,7 @@ dependencies = [
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "primal 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.32 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.38 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2044,13 +2044,13 @@ source = "git+https://github.com/paritytech/libusb-rs#442708954a720bc89a9cf41e7b
 dependencies = [
  "bit-set 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.48 (registry+https://github.com/rust-lang/crates.io-index)",
- "libusb-sys 0.2.4 (git+https://github.com/paritytech/libusb-sys)",
+ "libusb-sys 0.2.5 (git+https://github.com/paritytech/libusb-sys)",
 ]
 
 [[package]]
 name = "libusb-sys"
-version = "0.2.4"
-source = "git+https://github.com/paritytech/libusb-sys#1d33d9840a82adaf4d6a1a0f5141f022e5676802"
+version = "0.2.5"
+source = "git+https://github.com/paritytech/libusb-sys#79e570b00379e1550fb728f2fbd2a083dc99bda6"
 dependencies = [
  "cc 1.0.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.48 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4643,7 +4643,7 @@ dependencies = [
 "checksum libc 0.2.48 (registry+https://github.com/rust-lang/crates.io-index)" = "e962c7641008ac010fa60a7dfdc1712449f29c44ef2d4702394aea943ee75047"
 "checksum libloading 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9c3ad660d7cb8c5822cd83d10897b0f1f1526792737a179e73896152f85b88c2"
 "checksum libusb 0.3.0 (git+https://github.com/paritytech/libusb-rs)" = "<none>"
-"checksum libusb-sys 0.2.4 (git+https://github.com/paritytech/libusb-sys)" = "<none>"
+"checksum libusb-sys 0.2.5 (git+https://github.com/paritytech/libusb-sys)" = "<none>"
 "checksum linked-hash-map 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7860ec297f7008ff7a1e3382d7f7e1dcd69efc94751a2284bafc3d013c2aa939"
 "checksum linked-hash-map 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "70fb39025bc7cdd76305867c4eccf2f2dcf6e9a57f5b21a93e1c2d86cd03ec9e"
 "checksum lmdb-rkv 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)" = "28c3db6b404f0ad89fc7f4d14cb2d1883755ea1f3346066ffa08beef32f2a808"
