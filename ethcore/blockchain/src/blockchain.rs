@@ -835,7 +835,7 @@ impl BlockChain {
 		} else {
 			// parent not in the chain yet. we need the parent difficulty to proceed.
 			let d = parent_td
-				.expect("parent total difficulty always supplied for first block in chunk. only first block can have missing parent; qed");
+				.expect(&format!("parent total difficulty always supplied for first block in chunk. only first block can have missing parent; qed (#{})", block_number));
 
 			let info = BlockInfo {
 				hash: hash,

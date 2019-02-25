@@ -36,6 +36,7 @@ use super::{
 	GET_SNAPSHOT_DATA_PACKET,
 	GET_SNAPSHOT_MANIFEST_PACKET,
 	GET_FAST_WARP_DATA_PACKET,
+	GET_TOTAL_DIFF_PACKET,
 };
 
 /// The Chain Sync Requester: requesting data to other peers
@@ -79,6 +80,25 @@ impl SyncRequester {
 		rlp.append(&0u32);
 		rlp.append(&0u32);
 		SyncRequester::send_request(sync, io, peer_id, PeerAsking::ForkHeader, GET_BLOCK_HEADERS_PACKET, rlp.out());
+	}
+
+	/// Request headers from a peer by block number
+	pub fn request_header_by_number(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, n: BlockNumber) {
+		trace!(target: "sync", "{} <- GetkHeaderByNumber: at {}", peer_id, n);
+		let mut rlp = RlpStream::new_list(4);
+		rlp.append(&n);
+		rlp.append(&1u32);
+		rlp.append(&0u32);
+		rlp.append(&0u32);
+		SyncRequester::send_request(sync, io, peer_id, PeerAsking::BlockHeaderByNumber, GET_BLOCK_HEADERS_PACKET, rlp.out());
+	}
+
+	/// Request total difficulty from a peer by block number
+	pub fn request_total_difficulty(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, n: BlockNumber) {
+		trace!(target: "sync", "{} <- GetTotalDifficulty: at {}", peer_id, n);
+		let mut rlp = RlpStream::new_list(1);
+		rlp.append(&n);
+		SyncRequester::send_request(sync, io, peer_id, PeerAsking::TotalDifficulty(n), GET_TOTAL_DIFF_PACKET, rlp.out());
 	}
 
 	/// Request best block header from a peer by block hash

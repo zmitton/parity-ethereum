@@ -19,6 +19,7 @@ use std::time::Instant;
 
 // use ethcore_blockchain::{BlockChainDB};
 use block_sync::{BlockDownloader, BlockRequest};
+use blocks::{SyncHeader};
 use bytes::Bytes;
 use ethcore::account_db::{AccountDBMut};
 use ethereum_types::{H256, U256};
@@ -32,9 +33,8 @@ use sync_io::SyncIo;
 use trie::{TrieMut, NibbleSlice, NodeCodec, node::Node};
 use types::basic_account::BasicAccount;
 use types::BlockNumber;
-use types::blockchain_info::BlockChainInfo;
 
-use super::{BlockSet};
+use super::BlockSet;
 
 #[derive(Debug, Clone)]
 pub enum NodeDataRequest {
@@ -66,6 +66,10 @@ pub enum FastWarpRequest {
 	FastWarpData(H256, H256),
 	/// Get a sub-trie from a peer
 	NodeData(Vec<H256>),
+	/// Request total difficulty from peer
+	TotalDifficulty(BlockNumber),
+	/// Request a block header
+	BlockHeader(BlockNumber),
 }
 
 /// State of the Fast-Warp sync
@@ -102,9 +106,9 @@ impl StateDownloader {
 	/// Create a new State Downloader
 	pub fn new() -> Self {
 		StateDownloader {
-			// next_account_from: H256::zero(),
+			next_account_from: H256::zero(),
 			// Sensibly large account on Kovan
-			next_account_from: H256::from("0e84c7646acf8871fa5598a0dbce244b49fb9577e531ef260e21af123d279e9e"),
+			// next_account_from: H256::from("0e84c7646acf8871fa5598a0dbce244b49fb9577e531ef260e21af123d279e9e"),
 			next_storage_from: H256::zero(),
 			last_account_hash: H256::zero(),
 			last_storage_key: H256::zero(),
@@ -597,17 +601,21 @@ impl TrieDownloader {
 pub struct FastWarp {
 	/// State of the fast-warp sync
 	state: FastWarpState,
-	// Current state root
+	/// Current state root
 	state_root: H256,
+	/// Mapping of block numbers to total difficulty of the block
+	total_difficulties: HashMap<BlockNumber, U256>,
+	/// Block number of sync start
+	start_block_number: Option<BlockNumber>,
 }
 
 impl FastWarp {
-	pub fn new(chain_info: &BlockChainInfo) -> std::io::Result<FastWarp> {
-		let block_dl = BlockDownloader::new(BlockSet::FastWarpBlocks, &chain_info.best_block_hash, chain_info.best_block_number, true);
-
+	pub fn new() -> std::io::Result<FastWarp> {
 		Ok(FastWarp {
-			state: FastWarpState::BlockSync(block_dl),
+			state: FastWarpState::Idle,
 			state_root: KECCAK_NULL_RLP,
+			total_difficulties: HashMap::new(),
+			start_block_number: None,
 		})
 	}
 
@@ -681,6 +689,42 @@ impl FastWarp {
 	/// Request to the given Peer
 	pub fn request(&mut self, io: &mut SyncIo, peer_id: PeerId, highest_block: Option<BlockNumber>) -> Option<FastWarpRequest> {
 		match self.state {
+			FastWarpState::Idle => {
+				// Try setting the starting block number, if not set yet
+				if self.start_block_number.is_none() {
+					match highest_block {
+						Some(highest_block_number) if highest_block_number >= 300_000 => {
+							self.start_block_number = Some(highest_block_number - 300_000);
+						},
+						_ => (),
+					}
+				}
+
+				let start_bn = match self.start_block_number {
+					Some(bn) => bn,
+					None => return None,
+				};
+
+				let parent_start_bn = start_bn - 1;
+				if !self.total_difficulties.contains_key(&parent_start_bn) {
+					return Some(FastWarpRequest::TotalDifficulty(parent_start_bn));
+				}
+
+				// Set the start block_number if highest block known
+				let start_bh = match io.chain_overlay().read().get(&start_bn) {
+					None => {
+						return Some(FastWarpRequest::BlockHeader(start_bn));
+					},
+					Some(bytes) => {
+						SyncHeader::from_rlp(bytes.to_vec()).unwrap().header.hash()
+					},
+				};
+
+				trace!(target: "fast-warp", "Starting block downloads at {}", start_bn);
+				let block_dl = BlockDownloader::new(BlockSet::FastWarpBlocks, &start_bh, start_bn, true);
+				self.state = FastWarpState::BlockSync(block_dl);
+				return self.request(io, peer_id, highest_block);
+			},
 			FastWarpState::BlockSync(_) => {
 				// let latest_bn = {
 				// 	let block_dl = match self.state {
@@ -718,11 +762,16 @@ impl FastWarp {
 			FastWarpState::TrieSync(ref mut trie_dl) => {
 				Some(trie_dl.request(peer_id))
 			},
-			FastWarpState::Done | FastWarpState::Error | FastWarpState::Idle => {
+			FastWarpState::Done | FastWarpState::Error => {
 				trace!(target: "fast-warp", "Invalid state for request.");
 				None
 			},
 		}
+	}
+
+	pub fn set_total_difficulty(&mut self, block_number: BlockNumber, total_diff: U256) {
+		self.total_difficulties.insert(block_number, total_diff);
+		trace!(target: "fast-warp", "Set total difficulty for block #{}", block_number);
 	}
 
 	/// Commit changes to disk

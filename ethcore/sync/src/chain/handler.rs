@@ -61,6 +61,7 @@ use super::{
 	FAST_WARP_DATA_PACKET,
 	STATUS_PACKET,
 	NODE_DATA_PACKET,
+	TOTAL_DIFF_PACKET,
 };
 
 /// The Chain Sync Handler: handles responses from peers
@@ -81,6 +82,7 @@ impl SyncHandler {
 			SNAPSHOT_MANIFEST_PACKET => SyncHandler::on_snapshot_manifest(sync, io, peer, &rlp),
 			SNAPSHOT_DATA_PACKET => SyncHandler::on_snapshot_data(sync, io, peer, &rlp),
 			FAST_WARP_DATA_PACKET => SyncHandler::on_fast_warp_data(sync, io, peer, &rlp),
+			TOTAL_DIFF_PACKET => SyncHandler::on_total_difficulty(sync, io, peer, &rlp),
 			PRIVATE_TRANSACTION_PACKET => SyncHandler::on_private_transaction(sync, io, peer, &rlp),
 			SIGNED_PRIVATE_TRANSACTION_PACKET => SyncHandler::on_signed_private_transaction(sync, io, peer, &rlp),
 			_ => {
@@ -408,19 +410,26 @@ impl SyncHandler {
 
 	/// Called by peer once it has new block headers during sync
 	fn on_peer_block_headers(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
-		let is_fork_header_request = match sync.peers.get(&peer_id) {
-			Some(peer) if peer.asking == PeerAsking::ForkHeader => true,
-			_ => false,
-		};
-		if is_fork_header_request {
+		if sync.peers.get(&peer_id).map(|peer| peer.asking == PeerAsking::ForkHeader).unwrap_or(false) {
 			return SyncHandler::on_peer_fork_header(sync, io, peer_id, r);
 		}
-		let is_best_block_header_request = match sync.peers.get(&peer_id) {
-			Some(peer) if peer.asking == PeerAsking::BestBlockHeader => true,
-			_ => false,
-		};
-		if is_best_block_header_request {
+		if sync.peers.get(&peer_id).map(|peer| peer.asking == PeerAsking::BestBlockHeader).unwrap_or(false) {
 			return SyncHandler::on_peer_best_block_header(sync, io, peer_id, r);
+		}
+		if sync.peers.get(&peer_id).map(|peer| peer.asking == PeerAsking::BlockHeaderByNumber).unwrap_or(false) {
+			sync.reset_peer_asking(peer_id, PeerAsking::BlockHeaderByNumber);
+
+			if r.item_count()? != 1 {
+				return Ok(());
+			}
+
+			let bytes = r.at(0)?.as_raw().to_vec();
+			let info = SyncHeader::from_rlp(bytes)?;
+
+			trace!(target: "sync", "{}: Got peer block header at {}", peer_id, info.header.number());
+			io.chain_overlay().write().insert(info.header.number(), info.bytes);
+
+			return Ok(());
 		}
 
 		sync.clear_peer_download(peer_id);
@@ -639,6 +648,33 @@ impl SyncHandler {
 
 		trace!(target: "sync", "{} -> FastWarpData ({} bytes)", peer_id, r.as_raw().len());
 		sync.fast_warp.process(io, peer_id, r);
+		Ok(())
+	}
+
+	fn on_total_difficulty(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
+		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
+			trace!(target: "sync", "Ignoring total difficulty from unconfirmed peer {}", peer_id);
+			return Ok(());
+		}
+		sync.clear_peer_download(peer_id);
+		let block_number = sync.peers.get(&peer_id).and_then(|peer| {
+			match peer.asking {
+				PeerAsking::TotalDifficulty(block_number) => Some(block_number),
+				_ => None,
+			}
+		}).unwrap_or_default();
+		if !sync.reset_peer_asking(peer_id, PeerAsking::TotalDifficulty(block_number)) || sync.state != SyncState::FastWarp {
+			trace!(target: "sync", "{}: Ignored unexpected total difficulty", peer_id);
+			return Ok(());
+		}
+		if r.item_count().unwrap_or(0) != 1 {
+			trace!(target: "sync", "{}: Ignored invalid total difficulty", peer_id);
+			return Ok(());
+		}
+
+		let total_difficulty: U256 = r.val_at(0)?;
+		io.chain().set_total_difficulty(block_number, total_difficulty);
+		sync.fast_warp.set_total_difficulty(block_number, total_difficulty);
 		Ok(())
 	}
 

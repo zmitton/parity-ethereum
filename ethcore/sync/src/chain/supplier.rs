@@ -40,6 +40,7 @@ use super::{
 	GET_SNAPSHOT_DATA_PACKET,
 	GET_SNAPSHOT_MANIFEST_PACKET,
 	GET_FAST_WARP_DATA_PACKET,
+	GET_TOTAL_DIFF_PACKET,
 	MAX_BODIES_TO_SEND,
 	MAX_HEADERS_TO_SEND,
 	MAX_NODE_DATA_TO_SEND,
@@ -51,6 +52,7 @@ use super::{
 	FAST_WARP_DATA_PACKET,
 	STATUS_PACKET,
 	TRANSACTIONS_PACKET,
+	TOTAL_DIFF_PACKET,
 };
 
 /// The Chain Sync Supplier: answers requests from peers with available data
@@ -89,6 +91,10 @@ impl SyncSupplier {
 			GET_FAST_WARP_DATA_PACKET => SyncSupplier::return_rlp(io, &rlp, peer,
 				SyncSupplier::return_fast_warp_data,
 				|e| format!("Error sending fast-warp data: {:?}", e)),
+
+			GET_TOTAL_DIFF_PACKET => SyncSupplier::return_rlp(io, &rlp, peer,
+				SyncSupplier::return_total_diificulty,
+				|e| format!("Error sending total difficulty: {:?}", e)),
 
 			STATUS_PACKET => {
 				sync.write().on_packet(io, peer, packet_id, data);
@@ -363,6 +369,26 @@ impl SyncSupplier {
 		};
 
 		Ok(Some((FAST_WARP_DATA_PACKET, rlp)))
+	}
+
+	/// Respond to GetTotalDifficulty
+	fn return_total_diificulty(io: &SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
+		let block_number: BlockNumber = r.val_at(0)?;
+		trace!(target: "sync", "{} -> GetTotalDifficulty at {}", peer_id, block_number);
+
+		let rlp = match io.chain().block_total_difficulty(BlockId::Number(block_number)) {
+			Some(total_diff) => {
+				let mut rlp = RlpStream::new_list(1);
+				rlp.append(&total_diff);
+				rlp
+			},
+			None => {
+				RlpStream::new_list(0)
+			},
+		};
+
+		Ok(Some((TOTAL_DIFF_PACKET, rlp)))
+
 	}
 
 	fn return_rlp<FRlp, FError>(io: &mut SyncIo, rlp: &Rlp, peer: PeerId, rlp_func: FRlp, error_func: FError) -> Result<(), PacketDecodeError>

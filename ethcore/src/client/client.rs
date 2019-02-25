@@ -15,7 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::cmp;
-use std::collections::{HashSet, BTreeMap, VecDeque};
+use std::collections::{HashMap, HashSet, BTreeMap, VecDeque};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering as AtomicOrdering};
 use std::sync::{Arc, Weak};
@@ -248,6 +248,8 @@ pub struct Client {
 	exit_handler: Mutex<Option<Box<Fn(String) + 'static + Send>>>,
 
 	importer: Importer,
+	/// Cache of total difficulties for certain block numbers
+	total_difficulties: Mutex<HashMap<BlockNumber, U256>>,
 }
 
 impl Importer {
@@ -456,7 +458,7 @@ impl Importer {
 	///
 	/// The block is guaranteed to be the next best blocks in the
 	/// first block sequence. Does no sealing or transaction validation.
-	fn import_old_block(&self, unverified: Unverified, receipts_bytes: &[u8], db: &KeyValueDB, chain: &BlockChain, is_best: bool, is_ancient: bool) -> EthcoreResult<()> {
+	fn import_old_block(&self, unverified: Unverified, receipts_bytes: &[u8], db: &KeyValueDB, chain: &BlockChain, parent_td: Option<U256>, is_best: bool, is_ancient: bool) -> EthcoreResult<()> {
 		let receipts = ::rlp::decode_list(receipts_bytes);
 		let _import_lock = self.import_lock.lock();
 
@@ -468,7 +470,7 @@ impl Importer {
 
 			// Commit results
 			let mut batch = DBTransaction::new();
-			chain.insert_unordered_block(&mut batch, encoded::Block::new(unverified.bytes), receipts, None, is_best, is_ancient);
+			chain.insert_unordered_block(&mut batch, encoded::Block::new(unverified.bytes), receipts, parent_td, is_best, is_ancient);
 			// Final commit to the DB
 			db.write_buffered(batch);
 			chain.commit();
@@ -803,6 +805,7 @@ impl Client {
 			exit_handler: Mutex::new(None),
 			importer,
 			config,
+			total_difficulties: Mutex::new(HashMap::new()),
 		});
 
 		// prune old states.
@@ -1963,9 +1966,9 @@ impl BlockChainClient for Client {
 		rlps.begin_unbounded_list();
 
 		let start = Instant::now();
-		let duration_to_f64 = |d: Duration| {
-			d.as_secs() as f64 + (d.subsec_nanos() / 1_000_000) as f64 / 1_000.0
-		};
+		// let duration_to_f64 = |d: Duration| {
+		// 	d.as_secs() as f64 + (d.subsec_nanos() / 1_000_000) as f64 / 1_000.0
+		// };
 
 		for item in account_iter {
 			// [ account_hash ; account_data ; account_storage ]
@@ -2297,6 +2300,10 @@ impl BlockChainClient for Client {
 	fn journal_db(&self) -> Box<journaldb::JournalDB> {
 		self.state_db.read().journal_db().boxed_clone()
 	}
+
+	fn set_total_difficulty(&self, block_number: BlockNumber, total_difficulty: U256) {
+		self.total_difficulties.lock().insert(block_number, total_difficulty);
+	}
 }
 
 impl IoClient for Client {
@@ -2321,11 +2328,11 @@ impl IoClient for Client {
 		});
 	}
 
-	fn queue_ancient_block(&self, unverified: Unverified, receipts_bytes: Bytes, is_best: bool, is_ancient: bool) -> EthcoreResult<H256> {
+	fn queue_ancient_block(&self, unverified: Unverified, receipts_bytes: Bytes, is_best: bool, is_ancient: bool, force: bool) -> EthcoreResult<H256> {
 		trace_time!("queue_ancient_block");
 
 		let hash = unverified.hash();
-		{
+		if !force {
 			// check block order
 			if self.chain.read().is_known(&hash) {
 				bail!(EthcoreErrorKind::Import(ImportErrorKind::AlreadyInChain));
@@ -2357,11 +2364,27 @@ impl IoClient for Client {
 				let first = queued.write().1.pop_front();
 				if let Some((unverified, receipts_bytes)) = first {
 					let hash = unverified.hash();
+					let block_number = unverified.header.number();
+
+					let parent_td = if block_number > 1 {
+						let parent_bn = block_number - 1;
+
+						match client.total_difficulties.lock().get(&parent_bn) {
+							None => None,
+							Some(parent_td) => {
+								Some(parent_td.clone())
+							}
+						}
+					} else {
+						None
+					};
+
 					let result = client.importer.import_old_block(
 						unverified,
 						&receipts_bytes,
 						&**client.db.read().key_value(),
 						&*client.chain.read(),
+						parent_td,
 						is_best,
 						is_ancient,
 					);

@@ -181,6 +181,8 @@ pub const SIGNED_PRIVATE_TRANSACTION_PACKET: u8 = 0x17;
 
 pub const GET_FAST_WARP_DATA_PACKET: u8 = 0x18;
 pub const FAST_WARP_DATA_PACKET: u8 = 0x19;
+pub const GET_TOTAL_DIFF_PACKET: u8 = 0x1a;
+pub const TOTAL_DIFF_PACKET: u8 = 0x1b;
 
 const MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD: usize = 3;
 
@@ -194,6 +196,7 @@ const SNAPSHOT_MANIFEST_TIMEOUT: Duration = Duration::from_secs(5);
 const SNAPSHOT_DATA_TIMEOUT: Duration = Duration::from_secs(120);
 const FAST_WARP_DATA_TIMEOUT: Duration = Duration::from_secs(30);
 const NODE_DATA_TIMEOUT: Duration = Duration::from_secs(10);
+const TOTAL_DIFF_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Defines how much time we have to complete priority transaction or block propagation.
 /// after the deadline is reached the task is considered finished
@@ -297,6 +300,8 @@ pub enum PeerAsking {
 	SnapshotData,
 	FastWarpData,
 	NodeData,
+	TotalDifficulty(BlockNumber),
+	BlockHeaderByNumber,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -309,6 +314,7 @@ pub enum BlockSet {
 	/// Blocks downloaded for Fast-Warp
 	FastWarpBlocks,
 }
+
 #[derive(Clone, Eq, PartialEq)]
 pub enum ForkConfirmation {
 	/// Fork block confirmation pending.
@@ -665,7 +671,7 @@ impl ChainSync {
 	) -> Self {
 		let chain_info = chain.chain_info();
 		let best_block = chain.chain_info().best_block_number;
-		let fast_warp = FastWarp::new(&chain_info).expect("Couldn't create FastWarp");
+		let fast_warp = FastWarp::new().expect("Couldn't create FastWarp");
 		let state = Self::get_init_state(config.warp_sync, chain, &fast_warp);
 
 		let mut sync = ChainSync {
@@ -1007,6 +1013,12 @@ impl ChainSync {
 							FastWarpRequest::FastWarpData(account_from, storage_from) => {
 								SyncRequester::request_fast_warp_data(self, io, peer_id, &account_from, &storage_from);
 							},
+							FastWarpRequest::TotalDifficulty(block_number) => {
+								SyncRequester::request_total_difficulty(self, io, peer_id, block_number);
+							},
+							FastWarpRequest::BlockHeader(block_number) => {
+								SyncRequester::request_header_by_number(self, io, peer_id, block_number);
+							},
 						}
 					}
 				},
@@ -1224,7 +1236,7 @@ impl ChainSync {
 		for (peer_id, peer) in &self.peers {
 			let elapsed = tick - peer.ask_time;
 			let timeout = match peer.asking {
-				PeerAsking::BlockHeaders => elapsed > HEADERS_TIMEOUT,
+				PeerAsking::BlockHeaders | PeerAsking::BlockHeaderByNumber => elapsed > HEADERS_TIMEOUT,
 				PeerAsking::BlockBodies => elapsed > BODIES_TIMEOUT,
 				PeerAsking::BlockReceipts => elapsed > RECEIPTS_TIMEOUT,
 				PeerAsking::Nothing => false,
@@ -1233,6 +1245,7 @@ impl ChainSync {
 				PeerAsking::SnapshotData => elapsed > SNAPSHOT_DATA_TIMEOUT,
 				PeerAsking::FastWarpData => elapsed > FAST_WARP_DATA_TIMEOUT,
 				PeerAsking::NodeData => elapsed > NODE_DATA_TIMEOUT,
+				PeerAsking::TotalDifficulty(_) => elapsed > TOTAL_DIFF_TIMEOUT,
 			};
 			if timeout {
 				debug!(target:"sync", "Timeout {}", peer_id);

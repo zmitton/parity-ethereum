@@ -542,12 +542,12 @@ impl BlockDownloader {
 			}
 
 			let result = if let Some(receipts) = receipts {
-				let (is_best, is_ancient) = if self.fast_warp {
-					(true, false)
+				let (is_best, is_ancient, force) = if self.fast_warp {
+					(true, false, true)
 				} else {
-					(false, true)
+					(false, true, false)
 				};
-				io.chain().queue_ancient_block(block, receipts, is_best, is_ancient)
+				io.chain().queue_ancient_block(block, receipts, is_best, is_ancient, force)
 			} else {
 				io.chain().import_block(block)
 			};

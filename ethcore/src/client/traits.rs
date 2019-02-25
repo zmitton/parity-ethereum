@@ -194,7 +194,7 @@ pub trait IoClient: Sync + Send {
 	fn queue_transactions(&self, transactions: Vec<Bytes>, peer_id: usize);
 
 	/// Queue block import with transaction receipts. Does no sealing and transaction validation.
-	fn queue_ancient_block(&self, block_bytes: Unverified, receipts_bytes: Bytes, is_best: bool, is_ancient: bool) -> EthcoreResult<H256>;
+	fn queue_ancient_block(&self, block_bytes: Unverified, receipts_bytes: Bytes, is_best: bool, is_ancient: bool, force: bool) -> EthcoreResult<H256>;
 
 	/// Queue conensus engine message.
 	fn queue_consensus_message(&self, message: Bytes);
@@ -387,6 +387,9 @@ pub trait BlockChainClient : Sync + Send + AccountData + BlockChain + CallContra
 
 	/// Get a Box underlaying JournalDB
 	fn journal_db(&self) -> Box<JournalDB>;
+
+	/// Set the total difficulty for a given block number
+	fn set_total_difficulty(&self, block_number: BlockNumber, total_difficulty: U256);
 }
 
 /// Provides `reopen_block` method
