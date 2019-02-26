@@ -674,6 +674,8 @@ impl ChainSync {
 		let fast_warp = FastWarp::new().expect("Couldn't create FastWarp");
 		let state = Self::get_init_state(config.warp_sync, chain, &fast_warp);
 
+		Self::check_state_data(chain);
+
 		let mut sync = ChainSync {
 			state,
 			starting_block: best_block,
@@ -770,6 +772,26 @@ impl ChainSync {
 		// Reactivate peers only if some progress has been made
 		// since the last sync round of if starting fresh.
 		self.active_peers = self.peers.keys().cloned().collect();
+	}
+
+	fn check_state_data(chain: &BlockChainClient) {
+		let mut block_header = chain.block_header(BlockId::Latest).unwrap();
+		loop {
+			if block_header.number() < 10 {
+				break;
+			}
+			let state_root = block_header.state_root();
+			if chain.state_data(&state_root).is_none() {
+				break;
+			}
+			let parent_hash: H256 = block_header.parent_hash();
+			if let Some(parent_header) = chain.block_header(BlockId::Hash(parent_hash)) {
+				block_header = parent_header;
+			} else {
+				break;
+			}
+		}
+		info!(target: "sync", "Got state-root data until: {:#}", block_header.number());
 	}
 
 	/// Restart sync

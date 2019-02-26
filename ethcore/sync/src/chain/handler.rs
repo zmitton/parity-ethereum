@@ -647,8 +647,7 @@ impl SyncHandler {
 		}
 
 		trace!(target: "sync", "{} -> FastWarpData ({} bytes)", peer_id, r.as_raw().len());
-		sync.fast_warp.process(io, peer_id, r);
-		Ok(())
+		sync.fast_warp.process(io, peer_id, r)
 	}
 
 	fn on_total_difficulty(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
@@ -693,8 +692,7 @@ impl SyncHandler {
 		let item_count = r.item_count().unwrap_or(0);
 		trace!(target: "sync", "{} -> NodeData ({} entries)", peer_id, item_count);
 
-		sync.fast_warp.process(io, peer_id, r);
-		Ok(())
+		sync.fast_warp.process(io, peer_id, r)
 	}
 
 	/// Called by peer to report status

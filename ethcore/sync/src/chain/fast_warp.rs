@@ -18,7 +18,7 @@ use std::iter::FromIterator;
 use std::time::Instant;
 
 // use ethcore_blockchain::{BlockChainDB};
-use block_sync::{BlockDownloader, BlockRequest};
+use block_sync::{BlockDownloader, BlockRequest, BlockDownloaderImportError as DownloaderImportError};
 use blocks::{SyncHeader};
 use bytes::Bytes;
 use ethcore::account_db::{AccountDBMut};
@@ -35,6 +35,11 @@ use types::basic_account::BasicAccount;
 use types::BlockNumber;
 
 use super::BlockSet;
+
+/// Number of blocks bellow best-block to start fast-warp sync
+const BLOCKS_DELTA_START_SYNC: u64 = 3_000;
+/// Number of blocks headers to download at first
+const NUM_BLOCKS_HEADERS: u64 = 50_000;
 
 #[derive(Debug, Clone)]
 pub enum NodeDataRequest {
@@ -321,10 +326,10 @@ impl TrieDownloader {
 	}
 
 	/// Process incoming packet
-	pub fn process(&mut self, peer_id: PeerId, r: &Rlp, db: &mut Box<JournalDB>, state_root: &mut H256) -> FastWarpAction {
+	pub fn process(&mut self, peer_id: PeerId, r: &Rlp, db: &mut Box<JournalDB>, state_root: &mut H256) -> Result<FastWarpAction, DownloaderImportError> {
 		let node_data_hashes = match self.in_flight_requests.get(&peer_id) {
 			Some(vec) => vec,
-			None => return FastWarpAction::Continue,
+			None => return Ok(FastWarpAction::Continue),
 		};
 
 		if node_data_hashes.len() != r.item_count().unwrap_or(0) {
@@ -333,7 +338,12 @@ impl TrieDownloader {
 				node_data_hashes.len(),
 				r.item_count().unwrap_or(0),
 			);
-			return FastWarpAction::Continue;
+
+			for node_data_hash in node_data_hashes.iter() {
+				self.node_data_queries.insert(*node_data_hash);
+			}
+
+			return Err(DownloaderImportError::Invalid);
 		}
 
 		let mut accounts_to_insert = Vec::new();
@@ -507,18 +517,18 @@ impl TrieDownloader {
 				trace!(target: "sync", "Code hash queries: {:?}", code_hash_queries);
 			}
 
-			// {
-			// 	let mut account_trie = if *state_root != KECCAK_NULL_RLP {
-			// 		TrieDBMut::from_existing(db.as_hashdb_mut(), state_root).unwrap()
-			// 	} else {
-			// 		TrieDBMut::new(db.as_hashdb_mut(), state_root)
-			// 	};
+			{
+				let mut account_trie = if *state_root != KECCAK_NULL_RLP {
+					TrieDBMut::from_existing(db.as_hashdb_mut(), state_root).unwrap()
+				} else {
+					TrieDBMut::new(db.as_hashdb_mut(), state_root)
+				};
 
-			// 	for (hash, account) in accounts_to_insert.iter() {
-			// 		let thin_rlp = ::rlp::encode(account);
-			// 		account_trie.insert(&hash, &thin_rlp).unwrap();
-			// 	}
-			// }
+				for (hash, account) in accounts_to_insert.iter() {
+					let thin_rlp = ::rlp::encode(account);
+					account_trie.insert(&hash, &thin_rlp).unwrap();
+				}
+			}
 
 			FastWarp::commit(db);
 			trace!(target: "sync", "New state root: {:#?}", *state_root);
@@ -530,14 +540,14 @@ impl TrieDownloader {
 			if success {
 				info!(target: "sync", "Successfully finished Node Data requests");
 				self.prune(db, state_root);
-				return FastWarpAction::NextStep;
+				return Ok(FastWarpAction::NextStep);
 			} else {
 				error!(target: "fast-warp", "Errored while fast-warping: could not find target in TrieDB");
-				return FastWarpAction::Error;
+				return Ok(FastWarpAction::Error);
 			}
 		}
 
-		FastWarpAction::Continue
+		Ok(FastWarpAction::Continue)
 	}
 
 	/// Prune the DB removing all the old state data from the FastWarpSync state
@@ -634,7 +644,7 @@ impl FastWarp {
 	}
 
 	/// Process incoming packet
-	pub fn process(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) {
+	pub fn process(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
 		let mut db = io.chain().journal_db();
 		let next_state = match self.state {
 			FastWarpState::BlockSync(ref mut _block_dl) => {
@@ -646,15 +656,16 @@ impl FastWarp {
 
 				match action {
 					FastWarpAction::NextStep => {
-						let target = io.chain().chain_info().best_block_hash;
-						Some(FastWarpState::TrieSync(TrieDownloader::new(target)))
+						let target_block_header = io.chain().best_block_header();
+						let target_state_root: H256 = target_block_header.state_root().clone();
+						Some(FastWarpState::TrieSync(TrieDownloader::new(target_state_root)))
 					},
 					FastWarpAction::Continue => None,
 					FastWarpAction::Error => Some(FastWarpState::Error),
 				}
 			},
 			FastWarpState::TrieSync(ref mut trie_dl) => {
-				let action = trie_dl.process(peer_id, r, &mut db, &mut self.state_root);
+				let action = trie_dl.process(peer_id, r, &mut db, &mut self.state_root)?;
 
 				match action {
 					FastWarpAction::NextStep => {
@@ -684,6 +695,8 @@ impl FastWarp {
 		if let Some(state) = next_state {
 			self.state = state;
 		}
+
+		Ok(())
 	}
 
 	/// Request to the given Peer
@@ -693,8 +706,8 @@ impl FastWarp {
 				// Try setting the starting block number, if not set yet
 				if self.start_block_number.is_none() {
 					match highest_block {
-						Some(highest_block_number) if highest_block_number >= 300_000 => {
-							self.start_block_number = Some(highest_block_number - 300_000);
+						Some(highest_block_number) if highest_block_number >= NUM_BLOCKS_HEADERS => {
+							self.start_block_number = Some(highest_block_number - NUM_BLOCKS_HEADERS);
 						},
 						_ => (),
 					}
@@ -735,6 +748,7 @@ impl FastWarp {
 				// };
 				// let latest_bn = io.chain().chain_info().ancient_block_number.unwrap_or(0);
 				let latest_bn = io.chain().chain_info().best_block_number;
+				let queue_info = io.chain().queue_info();
 				let bn_delta = highest_block.map(|bn| {
 					if bn > latest_bn {
 						bn - latest_bn
@@ -743,9 +757,12 @@ impl FastWarp {
 					}
 				}).unwrap_or(1_000_000);
 
-				info!(target: "fast-warp", "Blocks-delta: {} ; Latest-block: {}", bn_delta, latest_bn);
-				if bn_delta <= 3_000 {
-					info!(target: "fast-warp", "Less than 30_000 blocks from tip. Syncing state.");
+				info!(target: "fast-warp",
+					"Blocks-delta: {} ; Latest-block: {} ; Queue: {:?}",
+					bn_delta, latest_bn, queue_info,
+				);
+				if bn_delta <= BLOCKS_DELTA_START_SYNC {
+					info!(target: "fast-warp", "Less than {} blocks from tip. Syncing state.", BLOCKS_DELTA_START_SYNC);
 					self.state = FastWarpState::StateSync(StateDownloader::new());
 					self.request(io, peer_id, highest_block)
 				} else {

@@ -250,8 +250,9 @@ impl SyncSupplier {
 		let mut count = r.item_count().unwrap_or(0);
 		trace!(target: "sync", "{} -> GetNodeData: {} entries", peer_id, count);
 		if count == 0 {
-			debug!(target: "sync", "Empty GetNodeData request, ignoring.");
-			return Ok(None);
+			debug!(target: "sync", "Empty GetNodeData request.");
+			let rlp = RlpStream::new_list(0);
+			return Ok(Some((NODE_DATA_PACKET, rlp)));
 		}
 		count = cmp::min(count, MAX_NODE_DATA_TO_SEND);
 		let mut added = 0usize;
