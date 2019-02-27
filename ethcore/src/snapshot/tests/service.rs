@@ -52,13 +52,16 @@ fn restored_is_equivalent() {
 	let restoration = restoration_db_handler(db_config);
 	let blockchain_db = restoration.open(&client_db).unwrap();
 
+	let a_db = new_temp_db(&path.join("a"));
+	let b_db = new_temp_db(&path.join("b"));
+
 	let spec = Spec::new_null();
 	let client2 = Client::new(
 		Default::default(),
 		&spec,
-		blockchain_db.clone(),
-		blockchain_db.clone(),
-		blockchain_db.clone(),
+		blockchain_db,
+		a_db,
+		b_db,
 		Arc::new(::miner::Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();

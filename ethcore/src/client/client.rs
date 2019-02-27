@@ -1338,20 +1338,26 @@ impl snapshot::DatabaseRestore for Client {
 		let mut chain = self.chain.write();
 		let mut tracedb = self.tracedb.write();
 		self.importer.miner.clear();
+		{
+			let state_db_backing = self.state_db_backing.write();
+			state_db_backing.restore(new_state_db)?;
 
-	    let state_db_backing = self.state_db_backing.write();
-	    state_db_backing.restore(new_state_db)?;
+			let cache_size = state_db.cache_size();
+			*state_db = StateDB::new(journaldb::new(state_db_backing.key_value().clone(), self.pruning, ::db::COL_STATE), cache_size);
+		}
+		{
+			let blockchain_db_backing = self.blockchain_db_backing.write();
+			blockchain_db_backing.restore(new_blockchain_db)?;
 
-        let blockchain_db_backing = self.blockchain_db_backing.write();
-	    blockchain_db_backing.restore(new_blockchain_db)?;
+			*chain = Arc::new(BlockChain::new(self.config.blockchain.clone(), &[], blockchain_db_backing.clone()));
+		}
+		{
+			let trace_db_backing = self.trace_db_backing.write();
+			trace_db_backing.restore(new_trace_db)?;
 
-        let trace_db_backing = self.trace_db_backing.write();
-	    trace_db_backing.restore(new_trace_db)?;
+			*tracedb = TraceDB::new(self.config.tracing.clone(), trace_db_backing.clone(), chain.clone());
+		}
 
-		let cache_size = state_db.cache_size();
-		*state_db = StateDB::new(journaldb::new(state_db_backing.key_value().clone(), self.pruning, ::db::COL_STATE), cache_size);
-		*chain = Arc::new(BlockChain::new(self.config.blockchain.clone(), &[], blockchain_db_backing.clone()));
-		*tracedb = TraceDB::new(self.config.tracing.clone(), trace_db_backing.clone(), chain.clone());
 		Ok(())
 	}
 }

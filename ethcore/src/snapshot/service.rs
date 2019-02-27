@@ -343,7 +343,7 @@ impl Service {
 		info!(target: "snapshot", "Migrated {} ancient blocks", migrated_blocks);
 
 		let rest_db = self.restoration_db();
-		self.client.restore_db(&*rest_db.to_string_lossy(), &*rest_db.to_string_lossy(), &*rest_db.to_string_lossy())?;
+		self.client.restore_db(&*rest_db.to_string_lossy(), &*rest_db.join("a").to_string_lossy(), &*rest_db.join("b").to_string_lossy())?;
 		Ok(())
 	}
 
@@ -695,6 +695,7 @@ impl Service {
 	fn feed_chunk(&self, hash: H256, chunk: &[u8], is_state: bool) {
 		// TODO: be able to process block chunks and state chunks at same time?
 		let mut restoration = self.restoration.lock();
+
 		match self.feed_chunk_with_restoration(&mut restoration, hash, chunk, is_state) {
 			Ok(()) |
 			Err(Error(SnapshotErrorKind::Snapshot(SnapshotError::RestorationAborted), _)) => (),

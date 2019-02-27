@@ -110,6 +110,8 @@ impl ClientService {
 			config,
 			&spec,
 			blockchain_db.clone(),
+			blockchain_db.clone(),
+			blockchain_db.clone(),
 			miner.clone(),
 			io_service.channel(),
 		)?;
