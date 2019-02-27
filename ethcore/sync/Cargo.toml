@@ -23,6 +23,7 @@ ethstore = { path = "../../accounts/ethstore" }
 fastmap = { path = "../../util/fastmap" }
 hashdb = "0.3.0"
 heapsize = "0.4"
+hex = "0.3.2"
 journaldb = { path = "../../util/journaldb" }
 keccak-hash = "0.1"
 keccak-hasher = { path = "../../util/keccak-hasher" }

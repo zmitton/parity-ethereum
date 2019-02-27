@@ -896,6 +896,10 @@ impl BlockChainClient for TestBlockChainClient {
 
 	fn registrar_address(&self) -> Option<Address> { None }
 
+	fn state_db(&self) -> StateDB {
+		panic!("Not implemented");
+	}
+
 	fn journal_db(&self) -> Box<journaldb::JournalDB> {
 		panic!("Not implemented");
 	}

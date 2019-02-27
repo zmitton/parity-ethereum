@@ -674,7 +674,22 @@ impl ChainSync {
 		let fast_warp = FastWarp::new().expect("Couldn't create FastWarp");
 		let state = Self::get_init_state(config.warp_sync, chain, &fast_warp);
 
-		Self::check_state_data(chain);
+		if false {
+			Self::check_state_data(chain);
+		}
+
+		if let Ok(state_at) = ::std::env::var("WRITE_STATE_AT") {
+			let mut db = chain.journal_db();
+			let mut target: [u8; 32] = [0; 32];
+			let mut idx = 0;
+			for byte in hex::decode(state_at).unwrap() {
+				target[idx] = byte;
+				idx += 1;
+			}
+			let target = H256::from(target);
+
+			fast_warp::write_state_at(&mut db, target, "eth-env-state");
+		}
 
 		let mut sync = ChainSync {
 			state,

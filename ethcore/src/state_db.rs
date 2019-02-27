@@ -404,6 +404,13 @@ impl StateDB {
 		trace!("Cache lookup skipped for {:?}: parent hash is unknown", addr);
 		false
 	}
+
+	/// Note the given account's hash as non-null in the Blooms
+	pub fn note_non_null_account_hash(&self, account_hash: &H256) {
+		trace!(target: "account_bloom", "Note account_hash bloom: {:#?}", account_hash);
+		let mut bloom = self.account_bloom.lock();
+		bloom.set(&*account_hash);
+	}
 }
 
 impl state::Backend for StateDB {

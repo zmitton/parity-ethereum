@@ -33,6 +33,7 @@ extern crate ethereum_types;
 extern crate ethstore;
 extern crate fastmap;
 extern crate hashdb;
+extern crate hex;
 extern crate journaldb;
 extern crate keccak_hash as hash;
 extern crate patricia_trie as trie;

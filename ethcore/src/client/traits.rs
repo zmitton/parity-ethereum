@@ -41,6 +41,7 @@ use types::pruning_info::PruningInfo;
 use types::receipt::LocalizedReceipt;
 use types::trace_filter::Filter as TraceFilter;
 use vm::LastHashes;
+use state_db::StateDB;
 
 use block::{OpenBlock, SealedBlock, ClosedBlock};
 use client::Mode;
@@ -384,6 +385,9 @@ pub trait BlockChainClient : Sync + Send + AccountData + BlockChain + CallContra
 
 	/// Get the address of the registry itself.
 	fn registrar_address(&self) -> Option<Address>;
+
+	/// Get the underlaying StateDB
+	fn state_db(&self) -> StateDB;
 
 	/// Get a Box underlaying JournalDB
 	fn journal_db(&self) -> Box<JournalDB>;

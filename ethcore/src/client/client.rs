@@ -752,7 +752,7 @@ impl Client {
 		let chain = Arc::new(BlockChain::new(config.blockchain.clone(), &gb, db.clone()));
 		let tracedb = RwLock::new(TraceDB::new(config.tracing.clone(), db.clone(), chain.clone()));
 
-		trace!("Cleanup journal: DB Earliest = {:?}, Latest = {:?}", state_db.journal_db().earliest_era(), state_db.journal_db().latest_era());
+		trace!(target: "client", "Cleanup journal: DB Earliest = {:?}, Latest = {:?}", state_db.journal_db().earliest_era(), state_db.journal_db().latest_era());
 
 		let history = if config.history < MIN_HISTORY_SIZE {
 			info!(target: "client", "Ignoring pruning history parameter of {}\
@@ -2299,6 +2299,10 @@ impl BlockChainClient for Client {
 
 	fn journal_db(&self) -> Box<journaldb::JournalDB> {
 		self.state_db.read().journal_db().boxed_clone()
+	}
+
+	fn state_db(&self) -> StateDB {
+		self.state_db.read().boxed_clone()
 	}
 
 	fn set_total_difficulty(&self, block_number: BlockNumber, total_difficulty: U256) {
