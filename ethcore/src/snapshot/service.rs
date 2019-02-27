@@ -67,7 +67,7 @@ impl Drop for Guard {
 /// External database restoration handler
 pub trait DatabaseRestore: Send + Sync {
 	/// Restart with a new backend. Takes ownership of passed database and moves it to a new location.
-	fn restore_db(&self, new_db: &str) -> Result<(), Error>;
+	fn restore_db(&self, new_state_db: &str, new_blockchain_db: &str, new_trace_db: &str) -> Result<(), Error>;
 }
 
 /// State restoration manager.
@@ -343,7 +343,7 @@ impl Service {
 		info!(target: "snapshot", "Migrated {} ancient blocks", migrated_blocks);
 
 		let rest_db = self.restoration_db();
-		self.client.restore_db(&*rest_db.to_string_lossy())?;
+		self.client.restore_db(&*rest_db.to_string_lossy(), &*rest_db.to_string_lossy(), &*rest_db.to_string_lossy())?;
 		Ok(())
 	}
 

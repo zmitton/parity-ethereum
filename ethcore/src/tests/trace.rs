@@ -48,7 +48,9 @@ fn can_trace_block_and_uncle_reward() {
 	let client = Client::new(
 		client_config,
 		&spec,
-		db,
+		db.clone(),
+		db.clone(),
+		db.clone(),
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();

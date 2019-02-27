@@ -49,7 +49,9 @@ fn imports_from_empty() {
 	let client = Client::new(
 		ClientConfig::default(),
 		&spec,
-		db,
+		db.clone(),
+		db.clone(),
+		db.clone(),
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -66,7 +68,9 @@ fn should_return_registrar() {
 	let client = Client::new(
 		ClientConfig::default(),
 		&spec,
-		db,
+		db.clone(),
+		db.clone(),
+		db.clone(),
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -94,7 +98,9 @@ fn imports_good_block() {
 	let client = Client::new(
 		ClientConfig::default(),
 		&spec,
-		db,
+		db.clone(),
+		db.clone(),
+		db.clone(),
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -117,7 +123,9 @@ fn query_none_block() {
 	let client = Client::new(
 		ClientConfig::default(),
 		&spec,
-		db,
+		db.clone(),
+		db.clone(),
+		db.clone(),
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -270,6 +278,8 @@ fn change_history_size() {
 			ClientConfig::default(),
 			&test_spec,
 			db.clone(),
+			db.clone(),
+			db.clone(),
 			Arc::new(Miner::new_for_tests(&test_spec, None)),
 			IoChannel::disconnected()
 		).unwrap();
@@ -287,7 +297,9 @@ fn change_history_size() {
 	let client = Client::new(
 		config,
 		&test_spec,
-		db,
+		db.clone(),
+		db.clone(),
+		db.clone(),
 		Arc::new(Miner::new_for_tests(&test_spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();

@@ -123,7 +123,9 @@ pub fn generate_dummy_client_with_spec_and_data<F>(test_spec: F, block_number: u
 	let client = Client::new(
 		ClientConfig::default(),
 		&test_spec,
-		client_db,
+		client_db.clone(),
+		client_db.clone(),
+		client_db.clone(),
 		Arc::new(Miner::new_for_tests(&test_spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -247,7 +249,9 @@ pub fn get_test_client_with_blocks(blocks: Vec<Bytes>) -> Arc<Client> {
 	let client = Client::new(
 		ClientConfig::default(),
 		&test_spec,
-		client_db,
+		client_db.clone(),
+		client_db.clone(),
+		client_db.clone(),
 		Arc::new(Miner::new_for_tests(&test_spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();

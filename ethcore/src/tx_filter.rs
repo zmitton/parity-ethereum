@@ -166,7 +166,9 @@ mod test {
 		let client = Client::new(
 			ClientConfig::default(),
 			&spec,
-			db,
+			db.clone(),
+			db.clone(),
+			db.clone(),
 			Arc::new(Miner::new_for_tests(&spec, None)),
 			IoChannel::disconnected(),
 		).unwrap();
@@ -245,7 +247,9 @@ mod test {
 		let client = Client::new(
 			ClientConfig::default(),
 			&spec,
-			db,
+			db.clone(),
+			db.clone(),
+			db.clone(),
 			Arc::new(Miner::new_for_tests(&spec, None)),
 			IoChannel::disconnected(),
 		).unwrap();

@@ -197,7 +197,9 @@ pub struct Client {
 	pruning: journaldb::Algorithm,
 
 	/// Client uses this to store blocks, traces, etc.
-	db: RwLock<Arc<BlockChainDB>>,
+    state_db_backing: RwLock<Arc<BlockChainDB>>,
+    blockchain_db_backing: RwLock<Arc<BlockChainDB>>,
+    trace_db_backing: RwLock<Arc<BlockChainDB>>,
 
 	state_db: RwLock<StateDB>,
 
@@ -353,8 +355,12 @@ impl Importer {
 			}
 		}
 
-		let db = client.db.read();
-		db.key_value().flush().expect("DB flush failed.");
+	    let blockchain_db_backing = client.blockchain_db_backing.read();
+	    blockchain_db_backing.key_value().flush().expect("DB flush failed.");
+
+	    let trace_db_backing = client.trace_db_backing.read();
+	    trace_db_backing.key_value().flush().expect("DB flush failed.");
+
 		imported
 	}
 
@@ -494,7 +500,9 @@ impl Importer {
 		let block = block.drain();
 		debug_assert_eq!(header.hash(), block_data.header_view().hash());
 
-		let mut batch = DBTransaction::new();
+	    let mut state_db_batch = DBTransaction::new();
+            let mut blockchain_db_batch = DBTransaction::new();
+            let mut trace_db_batch = DBTransaction::new();
 
 		let ancestry_actions = self.engine.ancestry_actions(&header, &mut chain.ancestry_with_metadata_iter(*parent));
 
@@ -539,16 +547,16 @@ impl Importer {
 		// check epoch end signal, potentially generating a proof on the current
 		// state.
 		if let Some(pending) = pending {
-			chain.insert_pending_transition(&mut batch, header.hash(), pending);
+		    chain.insert_pending_transition(&mut blockchain_db_batch, header.hash(), pending);
 		}
 
-		state.journal_under(&mut batch, number, hash).expect("DB commit failed");
+		state.journal_under(&mut state_db_batch, number, hash).expect("DB commit failed");
 
 		let finalized: Vec<_> = ancestry_actions.into_iter().map(|ancestry_action| {
 			let AncestryAction::MarkFinalized(a) = ancestry_action;
 
 			if a != header.hash() {
-				chain.mark_finalized(&mut batch, a).expect("Engine's ancestry action must be known blocks; qed");
+				chain.mark_finalized(&mut blockchain_db_batch, a).expect("Engine's ancestry action must be known blocks; qed");
 			} else {
 				// we're finalizing the current block
 				is_finalized = true;
@@ -557,12 +565,12 @@ impl Importer {
 			a
 		}).collect();
 
-		let route = chain.insert_block(&mut batch, block_data, receipts.clone(), ExtrasInsert {
+		let route = chain.insert_block(&mut blockchain_db_batch, block_data, receipts.clone(), ExtrasInsert {
 			fork_choice: fork_choice,
 			is_finalized,
 		});
 
-		client.tracedb.read().import(&mut batch, TraceImportRequest {
+		client.tracedb.read().import(&mut trace_db_batch, TraceImportRequest {
 			traces: traces.into(),
 			block_hash: hash.clone(),
 			block_number: number,
@@ -573,7 +581,10 @@ impl Importer {
 		let is_canon = route.enacted.last().map_or(false, |h| h == hash);
 		state.sync_cache(&route.enacted, &route.retracted, is_canon);
 		// Final commit to the DB
-		client.db.read().key_value().write_buffered(batch);
+	    client.state_db_backing.read().key_value().write_buffered(state_db_batch);
+            client.blockchain_db_backing.read().key_value().write_buffered(blockchain_db_batch);
+            client.trace_db_backing.read().key_value().write_buffered(trace_db_batch);
+
 		chain.commit();
 
 		self.check_epoch_end(&header, &finalized, &chain, client);
@@ -699,7 +710,7 @@ impl Importer {
 			// always write the batch directly since epoch transition proofs are
 			// fetched from a DB iterator and DB iterators are only available on
 			// flushed data.
-			client.db.read().key_value().write(batch).expect("DB flush failed");
+			client.blockchain_db_backing.read().key_value().write(batch).expect("DB flush failed");
 		}
 	}
 }
@@ -710,7 +721,9 @@ impl Client {
 	pub fn new(
 		config: ClientConfig,
 		spec: &Spec,
-		db: Arc<BlockChainDB>,
+	    state_db_backing: Arc<BlockChainDB>,
+            blockchain_db_backing: Arc<BlockChainDB>,
+            trace_db_backing: Arc<BlockChainDB>,
 		miner: Arc<Miner>,
 		message_channel: IoChannel<ClientIoMessage>,
 	) -> Result<Arc<Client>, ::error::Error> {
@@ -726,19 +739,19 @@ impl Client {
 			accountdb: Default::default(),
 		};
 
-		let journal_db = journaldb::new(db.key_value().clone(), config.pruning, ::db::COL_STATE);
+		let journal_db = journaldb::new(state_db_backing.key_value().clone(), config.pruning, ::db::COL_STATE);
 		let mut state_db = StateDB::new(journal_db, config.state_cache_size);
 		if state_db.journal_db().is_empty() {
 			// Sets the correct state root.
 			state_db = spec.ensure_db_good(state_db, &factories)?;
 			let mut batch = DBTransaction::new();
 			state_db.journal_under(&mut batch, 0, &spec.genesis_header().hash())?;
-			db.key_value().write(batch)?;
+			state_db_backing.key_value().write(batch)?;
 		}
 
 		let gb = spec.genesis_block();
-		let chain = Arc::new(BlockChain::new(config.blockchain.clone(), &gb, db.clone()));
-		let tracedb = RwLock::new(TraceDB::new(config.tracing.clone(), db.clone(), chain.clone()));
+		let chain = Arc::new(BlockChain::new(config.blockchain.clone(), &gb, blockchain_db_backing.clone()));
+		let tracedb = RwLock::new(TraceDB::new(config.tracing.clone(), trace_db_backing.clone(), chain.clone()));
 
 		trace!("Cleanup journal: DB Earliest = {:?}, Latest = {:?}", state_db.journal_db().earliest_era(), state_db.journal_db().latest_era());
 
@@ -775,7 +788,9 @@ impl Client {
 			tracedb: tracedb,
 			engine: engine,
 			pruning: config.pruning.clone(),
-			db: RwLock::new(db.clone()),
+		    state_db_backing: RwLock::new(state_db_backing.clone()),
+                    blockchain_db_backing: RwLock::new(blockchain_db_backing.clone()),
+                    trace_db_backing: RwLock::new(trace_db_backing.clone()),
 			state_db: RwLock::new(state_db),
 			report: RwLock::new(Default::default()),
 			io_channel: RwLock::new(message_channel),
@@ -830,12 +845,15 @@ impl Client {
 					proof: proof,
 				});
 
-				client.db.read().key_value().write_buffered(batch);
+				client.blockchain_db_backing.read().key_value().write_buffered(batch);
 			}
 		}
 
 		// ensure buffered changes are flushed.
-		client.db.read().key_value().flush()?;
+		client.state_db_backing.read().key_value().flush()?;
+	    client.blockchain_db_backing.read().key_value().flush()?;
+            client.trace_db_backing.read().key_value().flush()?;
+
 		Ok(client)
 	}
 
@@ -979,7 +997,7 @@ impl Client {
 						Some(ancient_hash) => {
 							let mut batch = DBTransaction::new();
 							state_db.mark_canonical(&mut batch, era, &ancient_hash)?;
-							self.db.read().key_value().write_buffered(batch);
+							self.state_db_backing.read().key_value().write_buffered(batch);
 							state_db.journal_db().flush();
 						}
 						None =>
@@ -1312,21 +1330,28 @@ impl Client {
 
 impl snapshot::DatabaseRestore for Client {
 	/// Restart the client with a new backend
-	fn restore_db(&self, new_db: &str) -> Result<(), EthcoreError> {
-		trace!(target: "snapshot", "Replacing client database with {:?}", new_db);
+	fn restore_db(&self, new_state_db: &str, new_blockchain_db: &str, new_trace_db: &str) -> Result<(), EthcoreError> {
+	    trace!(target: "snapshot", "Replacing client databases with {:?} {:?} {:?}", new_state_db, new_blockchain_db, new_trace_db);
 
 		let _import_lock = self.importer.import_lock.lock();
 		let mut state_db = self.state_db.write();
 		let mut chain = self.chain.write();
 		let mut tracedb = self.tracedb.write();
 		self.importer.miner.clear();
-		let db = self.db.write();
-		db.restore(new_db)?;
+
+	    let state_db_backing = self.state_db_backing.write();
+	    state_db_backing.restore(new_state_db)?;
+
+        let blockchain_db_backing = self.blockchain_db_backing.write();
+	    blockchain_db_backing.restore(new_blockchain_db)?;
+
+        let trace_db_backing = self.trace_db_backing.write();
+	    trace_db_backing.restore(new_trace_db)?;
 
 		let cache_size = state_db.cache_size();
-		*state_db = StateDB::new(journaldb::new(db.key_value().clone(), self.pruning, ::db::COL_STATE), cache_size);
-		*chain = Arc::new(BlockChain::new(self.config.blockchain.clone(), &[], db.clone()));
-		*tracedb = TraceDB::new(self.config.tracing.clone(), db.clone(), chain.clone());
+		*state_db = StateDB::new(journaldb::new(state_db_backing.key_value().clone(), self.pruning, ::db::COL_STATE), cache_size);
+		*chain = Arc::new(BlockChain::new(self.config.blockchain.clone(), &[], blockchain_db_backing.clone()));
+		*tracedb = TraceDB::new(self.config.tracing.clone(), trace_db_backing.clone(), chain.clone());
 		Ok(())
 	}
 }
@@ -1354,7 +1379,7 @@ impl BlockChainReset for Client {
 		// update the new best block hash
 		db_transaction.put(::db::COL_EXTRA, b"best", &*best_block_hash);
 
-		self.db.read()
+		self.blockchain_db_backing.read()
 			.key_value()
 			.write(db_transaction)
 			.map_err(|err| format!("could not complete reset operation; io error occured: {}", err))?;
@@ -2243,7 +2268,7 @@ impl IoClient for Client {
 					let result = client.importer.import_old_block(
 						unverified,
 						&receipts_bytes,
-						&**client.db.read().key_value(),
+						&**client.blockchain_db_backing.read().key_value(),
 						&*client.chain.read(),
 					);
 					if let Err(e) = result {
@@ -2420,7 +2445,11 @@ impl ImportSealedBlock for Client {
 				)
 			);
 		});
-		self.db.read().key_value().flush().expect("DB flush failed.");
+
+		self.state_db_backing.read().key_value().flush().expect("DB flush failed.");
+		self.blockchain_db_backing.read().key_value().flush().expect("DB flush failed.");
+		self.trace_db_backing.read().key_value().flush().expect("DB flush failed.");
+
 		Ok(hash)
 	}
 }
