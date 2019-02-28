@@ -191,7 +191,9 @@ impl SnapshotCommand {
 		let service = ClientService::start(
 			client_config,
 			&spec,
-			client_db,
+			client_db.clone(),
+			client_db.clone(),
+			client_db.clone(),
 			&snapshot_path,
 			restoration_db_handler,
 			&self.dirs.ipc_path(),

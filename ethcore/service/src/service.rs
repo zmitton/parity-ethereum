@@ -81,7 +81,9 @@ pub struct ClientService {
 	client: Arc<Client>,
 	snapshot: Arc<SnapshotService>,
 	private_tx: Arc<PrivateTxService>,
-	database: Arc<BlockChainDB>,
+	state_db_backing: Arc<BlockChainDB>,
+	blockchain_db_backing: Arc<BlockChainDB>,
+	trace_db_backing: Arc<BlockChainDB>,
 	_stop_guard: StopGuard,
 }
 
@@ -90,7 +92,9 @@ impl ClientService {
 	pub fn start(
 		config: ClientConfig,
 		spec: &Spec,
-		blockchain_db: Arc<BlockChainDB>,
+		state_db_backing: Arc<BlockChainDB>,
+		blockchain_db_backing: Arc<BlockChainDB>,
+		trace_db_backing: Arc<BlockChainDB>,
 		snapshot_path: &Path,
 		restoration_db_handler: Box<BlockChainDBHandler>,
 		_ipc_path: &Path,
@@ -109,9 +113,9 @@ impl ClientService {
 		let client = Client::new(
 			config,
 			&spec,
-			blockchain_db.clone(),
-			blockchain_db.clone(),
-			blockchain_db.clone(),
+			state_db_backing.clone(),
+			blockchain_db_backing.clone(),
+			trace_db_backing.clone(),
 			miner.clone(),
 			io_service.channel(),
 		)?;
@@ -159,7 +163,9 @@ impl ClientService {
 			client: client,
 			snapshot: snapshot,
 			private_tx,
-			database: blockchain_db,
+			state_db_backing: state_db_backing,
+			blockchain_db_backing: blockchain_db_backing,
+			trace_db_backing: trace_db_backing,
 			_stop_guard: stop_guard,
 		})
 	}
@@ -194,8 +200,11 @@ impl ClientService {
 		self.client.add_notify(notify);
 	}
 
-	/// Get a handle to the database.
-	pub fn db(&self) -> Arc<BlockChainDB> { self.database.clone() }
+	/// Get a handle to the state database.
+	pub fn state_db_backing(&self) -> Arc<BlockChainDB> { self.state_db_backing.clone() }
+
+	/// Get a handle to the blockchain database.
+	pub fn blockchain_db_backing(&self) -> Arc<BlockChainDB> { self.blockchain_db_backing.clone() }
 
 	/// Shutdown the Client Service
 	pub fn shutdown(&self) {

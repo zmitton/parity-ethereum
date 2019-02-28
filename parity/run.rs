@@ -565,7 +565,9 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	let service = ClientService::start(
 		client_config,
 		&spec,
-		client_db,
+		client_db.clone(),
+		client_db.clone(),
+		client_db.clone(),
 		&snapshot_path,
 		restoration_db_handler,
 		&cmd.dirs.ipc_path(),
@@ -593,7 +595,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 
 	// initialize the local node information store.
 	let store = {
-		let db = service.db();
+		let db = service.blockchain_db_backing();
 		let node_info = FullNodeInfo {
 			miner: match cmd.no_persistent_txqueue {
 				true => None,
@@ -965,4 +967,3 @@ fn wait_for_drop<T>(w: Weak<T>) {
 
 	warn!("Shutdown timeout reached, exiting uncleanly.");
 }
-

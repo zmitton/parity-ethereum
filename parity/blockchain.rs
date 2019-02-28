@@ -388,7 +388,9 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 	let service = ClientService::start(
 		client_config,
 		&spec,
-		client_db,
+		client_db.clone(),
+		client_db.clone(),
+		client_db.clone(),
 		&snapshot_path,
 		restoration_db_handler,
 		&cmd.dirs.ipc_path(),
@@ -580,7 +582,9 @@ fn start_client(
 	let service = ClientService::start(
 		client_config,
 		&spec,
-		client_db,
+		client_db.clone(),
+		client_db.clone(),
+		client_db.clone(),
 		&snapshot_path,
 		restoration_db_handler,
 		&dirs.ipc_path(),
