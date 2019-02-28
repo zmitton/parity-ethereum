@@ -32,6 +32,7 @@ use ethcore::error::{ImportErrorKind, ErrorKind as EthcoreErrorKind, Error as Et
 use ethcore::miner::Miner;
 use ethcore::verification::queue::VerifierSettings;
 use ethcore::verification::queue::kind::blocks::Unverified;
+use ethcore_db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS, NUM_TRACE_DB_COLUMNS};
 use ethcore_service::ClientService;
 use cache::CacheConfig;
 use informant::{Informant, FullNodeInformantData, MillisecondDuration};
@@ -228,6 +229,7 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	// initialize database.
 	let db = db::open_db(&client_blockchain_db_path.to_str().expect("DB path could not be converted to string."),
 						 &cmd.cache_config,
+						 NUM_BLOCKCHAIN_DB_COLUMNS,
 						 &cmd.compaction).map_err(|e| format!("Failed to open database: {:?}", e))?;
 
 	// TODO: could epoch signals be avilable at the end of the file?
@@ -385,15 +387,15 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 
 	client_config.queue.verifier_settings = cmd.verifier_settings;
 
-	let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config);
+	let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config, NUM_STATE_DB_COLUMNS);
 	let client_state_db = restoration_state_db_handler.open(&client_state_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-	let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config);
+	let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config, NUM_BLOCKCHAIN_DB_COLUMNS);
 	let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-	let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config);
+	let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config, NUM_TRACE_DB_COLUMNS);
 	let client_trace_db = restoration_trace_db_handler.open(&client_trace_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
@@ -591,15 +593,15 @@ fn start_client(
 		max_round_blocks_to_import,
 	);
 
-	let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config);
+	let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config, NUM_STATE_DB_COLUMNS);
 	let client_state_db = restoration_state_db_handler.open(&client_state_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-	let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config);
+	let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config, NUM_BLOCKCHAIN_DB_COLUMNS);
 	let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-	let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config);
+	let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config, NUM_TRACE_DB_COLUMNS);
 	let client_trace_db = restoration_trace_db_handler.open(&client_trace_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 

@@ -19,6 +19,7 @@ use std::time::Duration;
 
 use ethcore::client::DatabaseCompactionProfile;
 use ethcore::spec::{SpecParams, OptimizeFor};
+use ethcore_db::NUM_BLOCKCHAIN_DB_COLUMNS;
 use light::client::fetch::Unavailable as UnavailableDataFetcher;
 use light::Cache as LightDataCache;
 
@@ -88,6 +89,7 @@ pub fn execute(cmd: ExportHsyncCmd) -> Result<String, String> {
 	// initialize database.
 	let db = db::open_db(&db_dirs.client_blockchain_db_path(algorithm).to_str().expect("DB path could not be converted to string."),
 						 &cmd.cache_config,
+						 NUM_BLOCKCHAIN_DB_COLUMNS,
 						 &cmd.compaction).map_err(|e| format!("Failed to open database {:?}", e))?;
 
 	let service = light_client::Service::start(config, &spec, UnavailableDataFetcher, db, cache)

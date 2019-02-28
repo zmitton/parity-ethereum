@@ -27,6 +27,7 @@ use ethcore::miner::{self, stratum, Miner, MinerService, MinerOptions};
 use ethcore::snapshot::{self, SnapshotConfiguration};
 use ethcore::spec::{SpecParams, OptimizeFor};
 use ethcore::verification::queue::VerifierSettings;
+use ethcore_db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS, NUM_TRACE_DB_COLUMNS};
 use ethcore_logger::{Config as LogConfig, RotatingLogger};
 use ethcore_service::ClientService;
 use ethereum_types::Address;
@@ -252,6 +253,7 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	// initialize database.
 	let db = db::open_db(&db_dirs.client_blockchain_db_path(algorithm).to_str().expect("DB path could not be converted to string."),
 						 &cmd.cache_config,
+						 NUM_BLOCKCHAIN_DB_COLUMNS,
 						 &cmd.compaction).map_err(|e| format!("Failed to open database {:?}", e))?;
 
 	let service = light_client::Service::start(config, &spec, fetch, db, cache.clone())
@@ -558,15 +560,15 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	// set network path.
 	net_conf.net_config_path = Some(db_dirs.network_path().to_string_lossy().into_owned());
 
-	let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config);
+	let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config, NUM_STATE_DB_COLUMNS);
 	let client_state_db = restoration_state_db_handler.open(&client_state_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-	let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config);
+	let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config, NUM_BLOCKCHAIN_DB_COLUMNS);
 	let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-	let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config);
+	let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config, NUM_TRACE_DB_COLUMNS);
 	let client_trace_db = restoration_trace_db_handler.open(&client_trace_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 

@@ -26,6 +26,7 @@ use ethcore::snapshot::io::{SnapshotReader, PackedReader, PackedWriter};
 use ethcore::snapshot::service::Service as SnapshotService;
 use ethcore::client::{Mode, DatabaseCompactionProfile, VMType};
 use ethcore::miner::Miner;
+use ethcore_db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS, NUM_TRACE_DB_COLUMNS};
 use ethcore_service::ClientService;
 use types::ids::BlockId;
 
@@ -187,15 +188,15 @@ impl SnapshotCommand {
 
 		client_config.snapshot = self.snapshot_conf;
 
-		let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config);
+		let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config, NUM_STATE_DB_COLUMNS);
 		let client_state_db = restoration_state_db_handler.open(&client_state_db_path)
 			.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-		let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config);
+		let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config, NUM_BLOCKCHAIN_DB_COLUMNS);
 		let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
 			.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-		let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config);
+		let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config, NUM_TRACE_DB_COLUMNS);
 		let client_trace_db = restoration_trace_db_handler.open(&client_trace_db_path)
 			.map_err(|e| format!("Failed to open database {:?}", e))?;
 

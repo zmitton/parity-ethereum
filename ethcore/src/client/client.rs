@@ -722,8 +722,8 @@ impl Client {
 		config: ClientConfig,
 		spec: &Spec,
 	    state_db_backing: Arc<BlockChainDB>,
-            blockchain_db_backing: Arc<BlockChainDB>,
-            trace_db_backing: Arc<BlockChainDB>,
+        blockchain_db_backing: Arc<BlockChainDB>,
+        trace_db_backing: Arc<BlockChainDB>,
 		miner: Arc<Miner>,
 		message_channel: IoChannel<ClientIoMessage>,
 	) -> Result<Arc<Client>, ::error::Error> {

@@ -217,7 +217,7 @@ pub fn migrate(path: &Path, compaction_profile: &DatabaseCompactionProfile) -> R
 				max_open_files: 64,
 				memory_budget: None,
 				compaction: compaction_profile,
-				columns: ethcore_db::NUM_COLUMNS,
+				columns: ethcore_db::NUM_BLOCKCHAIN_DB_COLUMNS,
 			};
 
 			migrate_blooms(&db_path, &db_config).map_err(Error::BloomsDB)?;

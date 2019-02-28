@@ -23,7 +23,7 @@ use std::mem;
 
 use blockchain::{TreeRoute, BlockReceipts};
 use bytes::Bytes;
-use db::{NUM_COLUMNS, COL_STATE};
+use db::{NUM_STATE_DB_COLUMNS, COL_STATE};
 use ethcore_miner::pool::VerifiedTransaction;
 use ethereum_types::{H256, U256, Address};
 use ethkey::{Generator, Random};
@@ -387,7 +387,7 @@ impl TestBlockChainClient {
 }
 
 pub fn get_temp_state_db() -> StateDB {
-	let db = kvdb_memorydb::create(NUM_COLUMNS.unwrap_or(0));
+	let db = kvdb_memorydb::create(NUM_STATE_DB_COLUMNS.unwrap_or(0));
 	let journal_db = journaldb::new(Arc::new(db), journaldb::Algorithm::EarlyMerge, COL_STATE);
 	StateDB::new(journal_db, 1024 * 1024)
 }

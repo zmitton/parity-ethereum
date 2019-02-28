@@ -15,7 +15,6 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::path::Path;
-use ethcore_db::NUM_COLUMNS;
 use ethcore::client::{ClientConfig, DatabaseCompactionProfile};
 use super::kvdb_rocksdb::{CompactionProfile, DatabaseConfig};
 
@@ -27,8 +26,8 @@ pub fn compaction_profile(profile: &DatabaseCompactionProfile, db_path: &Path) -
 	}
 }
 
-pub fn client_db_config(client_path: &Path, client_config: &ClientConfig) -> DatabaseConfig {
-	let mut client_db_config = DatabaseConfig::with_columns(NUM_COLUMNS);
+pub fn client_db_config(client_path: &Path, client_config: &ClientConfig, num_columns: Option<u32>) -> DatabaseConfig {
+	let mut client_db_config = DatabaseConfig::with_columns(num_columns);
 
 	client_db_config.memory_budget = client_config.db_cache_size;
 	client_db_config.compaction = compaction_profile(&client_config.db_compaction, &client_path);

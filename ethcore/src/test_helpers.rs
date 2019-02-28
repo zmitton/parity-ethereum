@@ -20,6 +20,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
 
+use db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS, NUM_TRACE_DB_COLUMNS};
 use blockchain::{BlockChain, BlockChainDB, BlockChainDBHandler, Config as BlockChainConfig, ExtrasInsert};
 use blooms_db;
 use bytes::Bytes;
@@ -118,14 +119,16 @@ pub fn generate_dummy_client_with_spec_and_data<F>(test_spec: F, block_number: u
 	F: Fn() -> Spec
 {
 	let test_spec = test_spec();
-	let client_db = new_db();
+	let state_db = new_db(NUM_STATE_DB_COLUMNS);
+	let blockchain_db = new_db(NUM_BLOCKCHAIN_DB_COLUMNS);
+	let trace_db = new_db(NUM_TRACE_DB_COLUMNS);
 
 	let client = Client::new(
 		ClientConfig::default(),
 		&test_spec,
-		client_db.clone(),
-		client_db.clone(),
-		client_db.clone(),
+		state_db,
+		blockchain_db,
+		trace_db,
 		Arc::new(Miner::new_for_tests(&test_spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -244,14 +247,17 @@ pub fn push_block_with_transactions(client: &Arc<Client>, transactions: &[Signed
 /// Creates dummy client (not test client) with corresponding blocks
 pub fn get_test_client_with_blocks(blocks: Vec<Bytes>) -> Arc<Client> {
 	let test_spec = Spec::new_test();
-	let client_db = new_db();
+	let state_db = new_db(NUM_STATE_DB_COLUMNS);
+	let blockchain_db = new_db(NUM_BLOCKCHAIN_DB_COLUMNS);
+	let trace_db = new_db(NUM_TRACE_DB_COLUMNS);
+
 
 	let client = Client::new(
 		ClientConfig::default(),
 		&test_spec,
-		client_db.clone(),
-		client_db.clone(),
-		client_db.clone(),
+		state_db,
+		blockchain_db,
+		trace_db,
 		Arc::new(Miner::new_for_tests(&test_spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -289,7 +295,7 @@ impl BlockChainDB for TestBlockChainDB {
 }
 
 /// Creates new test instance of `BlockChainDB`
-pub fn new_db() -> Arc<BlockChainDB> {
+pub fn new_db(num_columns: Option<u32>) -> Arc<BlockChainDB> {
 	let blooms_dir = TempDir::new("").unwrap();
 	let trace_blooms_dir = TempDir::new("").unwrap();
 
@@ -298,19 +304,19 @@ pub fn new_db() -> Arc<BlockChainDB> {
 		trace_blooms: blooms_db::Database::open(trace_blooms_dir.path()).unwrap(),
 		_blooms_dir: blooms_dir,
 		_trace_blooms_dir: trace_blooms_dir,
-		key_value: Arc::new(::kvdb_memorydb::create(::db::NUM_COLUMNS.unwrap()))
+		key_value: Arc::new(::kvdb_memorydb::create(num_columns.unwrap()))
 	};
 
 	Arc::new(db)
 }
 
 /// Creates a new temporary `BlockChainDB` on FS
-pub fn new_temp_db(tempdir: &Path) -> Arc<BlockChainDB> {
+pub fn new_temp_db(tempdir: &Path, num_columns: Option<u32>) -> Arc<BlockChainDB> {
 	let blooms_dir = TempDir::new("").unwrap();
 	let trace_blooms_dir = TempDir::new("").unwrap();
 	let key_value_dir = tempdir.join("key_value");
 
-	let db_config = DatabaseConfig::with_columns(::db::NUM_COLUMNS);
+	let db_config = DatabaseConfig::with_columns(num_columns);
 	let key_value_db = Database::open(&db_config, key_value_dir.to_str().unwrap()).unwrap();
 
 	let db = TestBlockChainDB {
@@ -373,7 +379,7 @@ pub fn restoration_db_handler(config: kvdb_rocksdb::DatabaseConfig) -> Box<Block
 
 /// Generates dummy blockchain with corresponding amount of blocks
 pub fn generate_dummy_blockchain(block_number: u32) -> BlockChain {
-	let db = new_db();
+	let db = new_db(NUM_BLOCKCHAIN_DB_COLUMNS);
 	let bc = BlockChain::new(BlockChainConfig::default(), &create_unverifiable_block(0, H256::zero()), db.clone());
 
 	let mut batch = db.key_value().transaction();
@@ -391,7 +397,7 @@ pub fn generate_dummy_blockchain(block_number: u32) -> BlockChain {
 
 /// Generates dummy blockchain with corresponding amount of blocks (using creation with extra method for blocks creation)
 pub fn generate_dummy_blockchain_with_extra(block_number: u32) -> BlockChain {
-	let db = new_db();
+	let db = new_db(NUM_BLOCKCHAIN_DB_COLUMNS);
 	let bc = BlockChain::new(BlockChainConfig::default(), &create_unverifiable_block(0, H256::zero()), db.clone());
 
 	let mut batch = db.key_value().transaction();
@@ -409,7 +415,7 @@ pub fn generate_dummy_blockchain_with_extra(block_number: u32) -> BlockChain {
 
 /// Returns empty dummy blockchain
 pub fn generate_dummy_empty_blockchain() -> BlockChain {
-	let db = new_db();
+	let db = new_db(NUM_BLOCKCHAIN_DB_COLUMNS);
 	let bc = BlockChain::new(BlockChainConfig::default(), &create_unverifiable_block(0, H256::zero()), db.clone());
 	bc
 }
@@ -430,7 +436,7 @@ pub fn get_temp_state_with_factory(factory: EvmFactory) -> State<::state_db::Sta
 
 /// Returns temp state db
 pub fn get_temp_state_db() -> StateDB {
-	let db = new_db();
+	let db = new_db(NUM_STATE_DB_COLUMNS);
 	let journal_db = ::journaldb::new(db.key_value().clone(), ::journaldb::Algorithm::EarlyMerge, ::db::COL_STATE);
 	StateDB::new(journal_db, 5 * 1024 * 1024)
 }
