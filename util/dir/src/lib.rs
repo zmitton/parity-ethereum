@@ -165,9 +165,19 @@ impl DatabaseDirectories {
 		Path::new(&self.path).join(&self.spec_name)
 	}
 
-	/// Generic client path
-	pub fn client_path(&self, pruning: Algorithm) -> PathBuf {
-		self.db_root_path().join(pruning.as_internal_name_str()).join("db")
+	/// Generic client state DB path
+	pub fn client_state_db_path(&self, pruning: Algorithm) -> PathBuf {
+		self.db_root_path().join(pruning.as_internal_name_str()).join("state_db")
+	}
+
+	/// Generic client blockchain DB path
+	pub fn client_blockchain_db_path(&self, pruning: Algorithm) -> PathBuf {
+		self.db_root_path().join(pruning.as_internal_name_str()).join("blockchain_db")
+	}
+
+	/// Generic client trace DB path
+	pub fn client_trace_db_path(&self, pruning: Algorithm) -> PathBuf {
+		self.db_root_path().join(pruning.as_internal_name_str()).join("trace_db")
 	}
 
 	/// DB root path, named after genesis hash

@@ -200,7 +200,9 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	let algorithm = cmd.pruning.to_algorithm(&user_defaults);
 
 	// prepare client and snapshot paths.
-	let client_path = db_dirs.client_path(algorithm);
+	//let client_state_db_path = db_dirs.client_state_db_path(algorithm);
+	let client_blockchain_db_path = db_dirs.client_blockchain_db_path(algorithm);
+	//let client_trace_db_path = db_dirs.client_trace_db_path(algorithm);
 
 	// execute upgrades
 	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.compaction)?;
@@ -224,7 +226,7 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	config.queue.verifier_settings = cmd.verifier_settings;
 
 	// initialize database.
-	let db = db::open_db(&client_path.to_str().expect("DB path could not be converted to string."),
+	let db = db::open_db(&client_blockchain_db_path.to_str().expect("DB path could not be converted to string."),
 						 &cmd.cache_config,
 						 &cmd.compaction).map_err(|e| format!("Failed to open database: {:?}", e))?;
 
@@ -352,7 +354,10 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 	let fat_db = fatdb_switch_to_bool(cmd.fat_db, &user_defaults, algorithm)?;
 
 	// prepare client and snapshot paths.
-	let client_path = db_dirs.client_path(algorithm);
+	let client_state_db_path = db_dirs.client_state_db_path(algorithm);
+	let client_blockchain_db_path = db_dirs.client_blockchain_db_path(algorithm);
+	let client_trace_db_path = db_dirs.client_trace_db_path(algorithm);
+
 	let snapshot_path = db_dirs.snapshot_path();
 
 	// execute upgrades
@@ -380,19 +385,27 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 
 	client_config.queue.verifier_settings = cmd.verifier_settings;
 
-	let restoration_db_handler = db::restoration_db_handler(&client_path, &client_config);
-	let client_db = restoration_db_handler.open(&client_path)
+	let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config);
+	let client_state_db = restoration_state_db_handler.open(&client_state_db_path)
+		.map_err(|e| format!("Failed to open database {:?}", e))?;
+
+	let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config);
+	let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
+		.map_err(|e| format!("Failed to open database {:?}", e))?;
+
+	let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config);
+	let client_trace_db = restoration_trace_db_handler.open(&client_trace_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
 	// build client
 	let service = ClientService::start(
 		client_config,
 		&spec,
-		client_db.clone(),
-		client_db.clone(),
-		client_db.clone(),
+		client_state_db,
+		client_blockchain_db,
+		client_trace_db,
 		&snapshot_path,
-		restoration_db_handler,
+		restoration_blockchain_db_handler,
 		&cmd.dirs.ipc_path(),
 		// TODO [ToDr] don't use test miner here
 		// (actually don't require miner at all)
@@ -549,7 +562,10 @@ fn start_client(
 	}
 
 	// prepare client and snapshot paths.
-	let client_path = db_dirs.client_path(algorithm);
+	let client_state_db_path = db_dirs.client_state_db_path(algorithm);
+	let client_blockchain_db_path = db_dirs.client_blockchain_db_path(algorithm);
+	let client_trace_db_path = db_dirs.client_trace_db_path(algorithm);
+
 	let snapshot_path = db_dirs.snapshot_path();
 
 	// execute upgrades
@@ -575,18 +591,27 @@ fn start_client(
 		max_round_blocks_to_import,
 	);
 
-	let restoration_db_handler = db::restoration_db_handler(&client_path, &client_config);
-	let client_db = restoration_db_handler.open(&client_path)
+	let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config);
+	let client_state_db = restoration_state_db_handler.open(&client_state_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
+
+	let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config);
+	let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
+		.map_err(|e| format!("Failed to open database {:?}", e))?;
+
+	let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config);
+	let client_trace_db = restoration_trace_db_handler.open(&client_trace_db_path)
+		.map_err(|e| format!("Failed to open database {:?}", e))?;
+
 
 	let service = ClientService::start(
 		client_config,
 		&spec,
-		client_db.clone(),
-		client_db.clone(),
-		client_db.clone(),
+		client_state_db,
+		client_blockchain_db,
+		client_trace_db,
 		&snapshot_path,
-		restoration_db_handler,
+		restoration_blockchain_db_handler,
 		&dirs.ipc_path(),
 		// It's fine to use test version here,
 		// since we don't care about miner parameters at all

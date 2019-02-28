@@ -159,7 +159,10 @@ impl SnapshotCommand {
 		let fat_db = fatdb_switch_to_bool(self.fat_db, &user_defaults, algorithm)?;
 
 		// prepare client and snapshot paths.
-		let client_path = db_dirs.client_path(algorithm);
+		let client_state_db_path = db_dirs.client_state_db_path(algorithm);
+		let client_blockchain_db_path = db_dirs.client_blockchain_db_path(algorithm);
+		let client_trace_db_path = db_dirs.client_trace_db_path(algorithm);
+
 		let snapshot_path = db_dirs.snapshot_path();
 
 		// execute upgrades
@@ -184,18 +187,26 @@ impl SnapshotCommand {
 
 		client_config.snapshot = self.snapshot_conf;
 
-		let restoration_db_handler = db::restoration_db_handler(&client_path, &client_config);
-		let client_db = restoration_db_handler.open(&client_path)
+		let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config);
+		let client_state_db = restoration_state_db_handler.open(&client_state_db_path)
+			.map_err(|e| format!("Failed to open database {:?}", e))?;
+
+		let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config);
+		let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
+			.map_err(|e| format!("Failed to open database {:?}", e))?;
+
+		let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config);
+		let client_trace_db = restoration_trace_db_handler.open(&client_trace_db_path)
 			.map_err(|e| format!("Failed to open database {:?}", e))?;
 
 		let service = ClientService::start(
 			client_config,
 			&spec,
-			client_db.clone(),
-			client_db.clone(),
-			client_db.clone(),
+			client_state_db,
+			client_blockchain_db,
+			client_trace_db,
 			&snapshot_path,
-			restoration_db_handler,
+			restoration_blockchain_db_handler,
 			&self.dirs.ipc_path(),
 			// TODO [ToDr] don't use test miner here
 			// (actually don't require miner at all)
