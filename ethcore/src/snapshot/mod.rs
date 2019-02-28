@@ -458,7 +458,7 @@ impl StateRebuilder {
 
 		let bloom_journal = self.bloom.drain_journal();
 		let mut batch = backing.transaction();
-		StateDB::commit_bloom(&mut batch, bloom_journal)?;
+		StateDB::commit_bloom(&mut batch, bloom_journal);
 		self.db.inject(&mut batch)?;
 		backing.write_buffered(batch);
 		trace!(target: "snapshot", "current state root: {:?}", self.state_root);

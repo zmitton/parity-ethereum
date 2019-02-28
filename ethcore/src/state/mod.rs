@@ -1128,6 +1128,7 @@ impl<B: Backend> State<B> {
 		where F: Fn(Option<&Account>) -> U {
 		// check local cache first
 		if let Some(ref mut maybe_acc) = self.cache.borrow_mut().get_mut(a) {
+			trace!(target: "state", "Loaded account {:#?} from Cache", a);
 			if let Some(ref mut account) = maybe_acc.account {
 				let accountdb = self.factories.accountdb.readonly(self.db.as_hashdb(), account.address_hash(a));
 				if Self::update_account_cache(require, account, &self.db, accountdb.as_hashdb()) {
@@ -1140,6 +1141,7 @@ impl<B: Backend> State<B> {
 		}
 		// check global cache
 		let result = self.db.get_cached(a, |mut acc| {
+			trace!(target: "state", "Loaded account {:#?} from DB Cache", a);
 			if let Some(ref mut account) = acc {
 				let accountdb = self.factories.accountdb.readonly(self.db.as_hashdb(), account.address_hash(a));
 				if !Self::update_account_cache(require, account, &self.db, accountdb.as_hashdb()) {
@@ -1152,12 +1154,16 @@ impl<B: Backend> State<B> {
 			Some(r) => Ok(r?),
 			None => {
 				// first check if it is not in database for sure
-				if check_null && self.db.is_known_null(a) { return Ok(f(None)); }
+				if check_null && self.db.is_known_null(a) {
+					trace!(target: "state", "Account is known null {:#?}", a);
+					return Ok(f(None));
+				}
 
 				// not found in the global cache, get from the DB and insert into local
 				let db = self.factories.trie.readonly(self.db.as_hashdb(), &self.root)?;
 				let from_rlp = |b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
 				let mut maybe_acc = db.get_with(a, from_rlp)?;
+				trace!(target: "state", "Loaded account {:#?} from DB", a);
 				if let Some(ref mut account) = maybe_acc.as_mut() {
 					let accountdb = self.factories.accountdb.readonly(self.db.as_hashdb(), account.address_hash(a));
 					if !Self::update_account_cache(require, account, &self.db, accountdb.as_hashdb()) {

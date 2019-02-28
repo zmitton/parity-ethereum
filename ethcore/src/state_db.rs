@@ -183,7 +183,7 @@ impl StateDB {
 	}
 
 	/// Commit blooms journal to the database transaction
-	pub fn commit_bloom(batch: &mut DBTransaction, journal: BloomJournal) -> io::Result<()> {
+	pub fn commit_bloom(batch: &mut DBTransaction, journal: BloomJournal) {
 		assert!(journal.hash_functions <= 255);
 		batch.put(COL_ACCOUNT_BLOOM, ACCOUNT_BLOOM_HASHCOUNT_KEY, &[journal.hash_functions as u8]);
 		let mut key = [0u8; 8];
@@ -194,14 +194,13 @@ impl StateDB {
 			LittleEndian::write_u64(&mut val, bloom_part_value);
 			batch.put(COL_ACCOUNT_BLOOM, &key, &val);
 		}
-		Ok(())
 	}
 
 	/// Journal all recent operations under the given era and ID.
 	pub fn journal_under(&mut self, batch: &mut DBTransaction, now: u64, id: &H256) -> io::Result<u32> {
 		{
  			let mut bloom_lock = self.account_bloom.lock();
- 			Self::commit_bloom(batch, bloom_lock.drain_journal())?;
+ 			Self::commit_bloom(batch, bloom_lock.drain_journal());
  		}
 		let records = self.db.journal_under(batch, now, id)?;
 		self.commit_hash = Some(id.clone());
@@ -410,6 +409,12 @@ impl StateDB {
 		trace!(target: "account_bloom", "Note account_hash bloom: {:#?}", account_hash);
 		let mut bloom = self.account_bloom.lock();
 		bloom.set(&*account_hash);
+	}
+
+	/// Journal the bloom to the given DB transaction batch
+	pub fn journal_bloom(&mut self, batch: &mut DBTransaction) {
+		let mut bloom_lock = self.account_bloom.lock();
+		Self::commit_bloom(batch, bloom_lock.drain_journal());
 	}
 }
 

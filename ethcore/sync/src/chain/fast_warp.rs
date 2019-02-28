@@ -52,10 +52,10 @@ pub fn write_state_at(db: &mut Box<JournalDB>, state_root: H256, filename: &str)
 
 	info!(target: "fast-warp", "Writting state from {:#?} at {}", state_root, filename);
 
-    let mut file = File::create(format!("/tmp/{}.txt", filename)).unwrap();
-	let account_trie = TrieDB::new(db.as_hashdb(), &state_root).unwrap();
+    let mut file = File::create(format!("/tmp/{}.txt", filename)).expect("Could not create file");
+	let account_trie = TrieDB::new(db.as_hashdb(), &state_root).expect("Could not create TrieDB");
 
-	for item in account_trie.iter().unwrap() {
+	for item in account_trie.iter().expect("Could not iter through accounts") {
 		let (account_key, account_data) = item.unwrap();
 		let account_key_hash = H256::from_slice(&account_key);
 		let account: BasicAccount = ::rlp::decode(&*account_data).unwrap();
@@ -151,8 +151,8 @@ pub struct StateDownloader {
 	next_storage_from: H256,
 	/// Hash of the last account's address received
 	last_account_hash: H256,
-	/// Key of the last storage key-value pair received
-	last_storage_key: H256,
+	/// Storage root of the last account
+	last_storage_root: H256,
 	/// To compute ETA
 	started_at: Instant,
 }
@@ -166,7 +166,7 @@ impl StateDownloader {
 			// next_account_from: H256::from("0e84c7646acf8871fa5598a0dbce244b49fb9577e531ef260e21af123d279e9e"),
 			next_storage_from: H256::zero(),
 			last_account_hash: H256::zero(),
-			last_storage_key: H256::zero(),
+			last_storage_root: H256::zero(),
 			started_at: Instant::now(),
 		}
 	}
@@ -182,7 +182,7 @@ impl StateDownloader {
 		let empty_rlp = StateAccount::new_basic(U256::zero(), U256::zero()).rlp();
 
 		// This should be [account_hash, storage_key, storage_root]
-		let num_accounts = r.item_count().unwrap();
+		let num_accounts = r.item_count().expect("Could not get tiem count in StateDl::process");
 
 		if num_accounts == 0 {
 			return FastWarpAction::NextStep;
@@ -202,7 +202,7 @@ impl StateDownloader {
 
 				let mut acct_db = AccountDBMut::from_hash(hashdb, account_hash);
 				let mut storage_root = if self.last_account_hash == account_hash {
-					self.last_storage_key
+					self.last_storage_root
 				}  else {
 					H256::zero()
 				};
@@ -280,7 +280,7 @@ impl StateDownloader {
 		}
 
 		if should_finish {
-			FastWarp::commit(db);
+			FastWarp::commit(state_db);
 			return FastWarpAction::NextStep;
 		}
 
@@ -299,7 +299,7 @@ impl StateDownloader {
 
 		{
 			let mut account_trie = if *state_root != KECCAK_NULL_RLP {
-				TrieDBMut::from_existing(db.as_hashdb_mut(), state_root).unwrap()
+				TrieDBMut::from_existing(db.as_hashdb_mut(), state_root).expect("Could not get TrieDB from_existing in StateDL::process")
 			} else {
 				TrieDBMut::new(db.as_hashdb_mut(), state_root)
 			};
@@ -309,11 +309,11 @@ impl StateDownloader {
 					state_db.note_non_null_account_hash(&hash);
 				}
 
-				account_trie.insert(&hash, &thin_rlp).unwrap();
+				account_trie.insert(&hash, &thin_rlp).expect("Could not call account_trie.insert in StateDL::process");
 			}
 		}
 
-		FastWarp::commit(db);
+		FastWarp::commit(state_db);
 		self.update(last_item.0, last_item.1, last_item.2);
 		FastWarpAction::Continue
 	}
@@ -324,7 +324,7 @@ impl StateDownloader {
 		self.next_storage_from = H256::from(U256::from(storage_from) + U256::one());
 
 		self.last_account_hash = account_from;
-		self.last_storage_key = storage_root;
+		self.last_storage_root = storage_root;
 	}
 }
 
@@ -409,7 +409,7 @@ impl TrieDownloader {
 		let mut accounts_to_insert = Vec::new();
 
 		for (rlp_data, node_data_key) in r.iter().zip(node_data_hashes) {
-			let request = self.node_data_requests.remove(&node_data_key).unwrap();
+			let request = self.node_data_requests.remove(&node_data_key).expect("Could not remove node data request");
 			let state_data: Bytes = rlp_data.data()?.to_vec();
 
 			match request {
@@ -623,14 +623,14 @@ impl TrieDownloader {
 			// trace!(target: "sync", "New state root: {:#?}", *state_root);
 		}
 
-		FastWarp::commit(db);
+		FastWarp::commit(state_db);
 
 		if self.node_data_queries.len() == 0 {
 			let success = db.as_hashdb_mut().contains(&self.target);
 
 			if success {
 				info!(target: "sync", "Successfully finished Node Data requests");
-				self.prune(db, state_root);
+				self.prune(state_db, state_root);
 				write_state_at(db, self.target, "eth-fw-state");
 				return Ok(FastWarpAction::NextStep);
 			} else {
@@ -643,7 +643,8 @@ impl TrieDownloader {
 	}
 
 	/// Prune the DB removing all the old state data from the FastWarpSync state
-	fn prune (&self, db: &mut Box<JournalDB>, state_root: &H256) {
+	fn prune (&self, state_db: &mut StateDB, state_root: &H256) {
+		let mut db = state_db.journal_db().boxed_clone();
 		let mut to_delete: Vec<H256> = Vec::new();
 		let mut count = 0;
 
@@ -695,7 +696,7 @@ impl TrieDownloader {
 			db.as_hashdb_mut().remove(&state_key);
 		}
 
-		FastWarp::commit(db);
+		FastWarp::commit(state_db);
 		info!(target: "fast-warp", "Done pruning. Deleted {} keys", count);
 	}
 }
@@ -764,7 +765,7 @@ impl FastWarp {
 
 				match action {
 					FastWarpAction::NextStep => {
-						let best_block_header = io.chain().block_header(BlockId::Latest).unwrap();
+						let best_block_header = io.chain().block_header(BlockId::Latest).expect("Could not get latest block header");
 						let block_number = best_block_header.number();
 						let block_hash = best_block_header.hash();
 						FastWarp::finalize(&mut db, block_number, block_hash);
@@ -896,10 +897,12 @@ impl FastWarp {
 	}
 
 	/// Commit changes to disk
-	pub fn commit(db: &mut Box<JournalDB>) {
+	pub fn commit(state_db: &mut StateDB) {
+		let mut db = state_db.journal_db().boxed_clone();
 		let backing = db.backing().clone();
 		let mut batch = backing.transaction();
-		db.inject(&mut batch).unwrap();
+		state_db.journal_bloom(&mut batch);
+		db.inject(&mut batch).expect("Could not call db.inject");
 		backing.write_buffered(batch);
 		db.flush();
 	}
@@ -907,7 +910,7 @@ impl FastWarp {
 	/// Finalize the restoration
 	pub fn finalize(db: &mut Box<JournalDB>, era: u64, id: H256) {
 		let mut batch = db.backing().transaction();
-		db.journal_under(&mut batch, era, &id).unwrap();
+		db.journal_under(&mut batch, era, &id).expect("Could not call db.journal_under");
 		db.backing().write_buffered(batch);
 	}
 }
