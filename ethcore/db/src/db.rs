@@ -27,8 +27,6 @@ use rlp;
 // database columns
 /// Column for State
 pub const COL_STATE: Option<u32> = Some(0);
-/// Column for the empty accounts bloom filter.
-pub const COL_ACCOUNT_BLOOM: Option<u32> = Some(1);
 /// Number of columns in DB
 pub const NUM_STATE_DB_COLUMNS: Option<u32> = Some(2);
 
@@ -38,17 +36,16 @@ pub const COL_HEADERS: Option<u32> = Some(0);
 pub const COL_BODIES: Option<u32> = Some(1);
 /// Column for Extras
 pub const COL_EXTRA: Option<u32> = Some(2);
-/// Column for general information from the local node which can persist.
-pub const COL_NODE_INFO: Option<u32> = Some(3);
-/// Column for the light client chain.
-pub const COL_LIGHT_CHAIN: Option<u32> = Some(4);
-/// Number of columns in DB
-pub const NUM_BLOCKCHAIN_DB_COLUMNS: Option<u32> = Some(5);
-
 /// Column for Traces
-pub const COL_TRACE: Option<u32> = Some(0);
+pub const COL_TRACE: Option<u32> = Some(3);
+/// Column for the empty accounts bloom filter.
+pub const COL_ACCOUNT_BLOOM: Option<u32> = Some(4);
+/// Column for general information from the local node which can persist.
+pub const COL_NODE_INFO: Option<u32> = Some(5);
+/// Column for the light client chain.
+pub const COL_LIGHT_CHAIN: Option<u32> = Some(6);
 /// Number of columns in DB
-pub const NUM_TRACE_DB_COLUMNS: Option<u32> = Some(1);
+pub const NUM_BLOCKCHAIN_DB_COLUMNS: Option<u32> = Some(7);
 
 /// Modes for updating caches.
 #[derive(Clone, Copy)]

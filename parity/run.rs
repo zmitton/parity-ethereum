@@ -27,7 +27,7 @@ use ethcore::miner::{self, stratum, Miner, MinerService, MinerOptions};
 use ethcore::snapshot::{self, SnapshotConfiguration};
 use ethcore::spec::{SpecParams, OptimizeFor};
 use ethcore::verification::queue::VerifierSettings;
-use ethcore_db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS, NUM_TRACE_DB_COLUMNS};
+use ethcore_db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS};
 use ethcore_logger::{Config as LogConfig, RotatingLogger};
 use ethcore_service::ClientService;
 use ethereum_types::Address;
@@ -419,7 +419,6 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	// prepare client and snapshot paths.
 	let client_state_db_path = db_dirs.client_state_db_path(algorithm);
 	let client_blockchain_db_path = db_dirs.client_blockchain_db_path(algorithm);
-	let client_trace_db_path = db_dirs.client_trace_db_path(algorithm);
 
 	let snapshot_path = db_dirs.snapshot_path();
 
@@ -568,9 +567,6 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-	let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config, NUM_TRACE_DB_COLUMNS);
-	let client_trace_db = restoration_trace_db_handler.open(&client_trace_db_path)
-		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
 	let private_tx_signer = account_utils::private_tx_signer(account_provider.clone(), &passwords)?;
 
@@ -580,7 +576,6 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		&spec,
 		client_state_db,
 		client_blockchain_db,
-		client_trace_db,
 		&snapshot_path,
 		restoration_blockchain_db_handler,
 		&cmd.dirs.ipc_path(),

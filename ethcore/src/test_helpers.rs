@@ -20,7 +20,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
 
-use db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS, NUM_TRACE_DB_COLUMNS};
+use db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS};
 use blockchain::{BlockChain, BlockChainDB, BlockChainDBHandler, Config as BlockChainConfig, ExtrasInsert};
 use blooms_db;
 use bytes::Bytes;
@@ -121,14 +121,12 @@ pub fn generate_dummy_client_with_spec_and_data<F>(test_spec: F, block_number: u
 	let test_spec = test_spec();
 	let state_db = new_db(NUM_STATE_DB_COLUMNS);
 	let blockchain_db = new_db(NUM_BLOCKCHAIN_DB_COLUMNS);
-	let trace_db = new_db(NUM_TRACE_DB_COLUMNS);
 
 	let client = Client::new(
 		ClientConfig::default(),
 		&test_spec,
 		state_db,
 		blockchain_db,
-		trace_db,
 		Arc::new(Miner::new_for_tests(&test_spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -249,15 +247,12 @@ pub fn get_test_client_with_blocks(blocks: Vec<Bytes>) -> Arc<Client> {
 	let test_spec = Spec::new_test();
 	let state_db = new_db(NUM_STATE_DB_COLUMNS);
 	let blockchain_db = new_db(NUM_BLOCKCHAIN_DB_COLUMNS);
-	let trace_db = new_db(NUM_TRACE_DB_COLUMNS);
-
 
 	let client = Client::new(
 		ClientConfig::default(),
 		&test_spec,
 		state_db,
 		blockchain_db,
-		trace_db,
 		Arc::new(Miner::new_for_tests(&test_spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();

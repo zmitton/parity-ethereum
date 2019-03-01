@@ -32,7 +32,7 @@ use ethcore::error::{ImportErrorKind, ErrorKind as EthcoreErrorKind, Error as Et
 use ethcore::miner::Miner;
 use ethcore::verification::queue::VerifierSettings;
 use ethcore::verification::queue::kind::blocks::Unverified;
-use ethcore_db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS, NUM_TRACE_DB_COLUMNS};
+use ethcore_db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS};
 use ethcore_service::ClientService;
 use cache::CacheConfig;
 use informant::{Informant, FullNodeInformantData, MillisecondDuration};
@@ -358,7 +358,6 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 	// prepare client and snapshot paths.
 	let client_state_db_path = db_dirs.client_state_db_path(algorithm);
 	let client_blockchain_db_path = db_dirs.client_blockchain_db_path(algorithm);
-	let client_trace_db_path = db_dirs.client_trace_db_path(algorithm);
 
 	let snapshot_path = db_dirs.snapshot_path();
 
@@ -395,17 +394,12 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 	let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-	let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config, NUM_TRACE_DB_COLUMNS);
-	let client_trace_db = restoration_trace_db_handler.open(&client_trace_db_path)
-		.map_err(|e| format!("Failed to open database {:?}", e))?;
-
 	// build client
 	let service = ClientService::start(
 		client_config,
 		&spec,
 		client_state_db,
 		client_blockchain_db,
-		client_trace_db,
 		&snapshot_path,
 		restoration_blockchain_db_handler,
 		&cmd.dirs.ipc_path(),
@@ -566,7 +560,6 @@ fn start_client(
 	// prepare client and snapshot paths.
 	let client_state_db_path = db_dirs.client_state_db_path(algorithm);
 	let client_blockchain_db_path = db_dirs.client_blockchain_db_path(algorithm);
-	let client_trace_db_path = db_dirs.client_trace_db_path(algorithm);
 
 	let snapshot_path = db_dirs.snapshot_path();
 
@@ -601,17 +594,11 @@ fn start_client(
 	let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
 		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-	let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config, NUM_TRACE_DB_COLUMNS);
-	let client_trace_db = restoration_trace_db_handler.open(&client_trace_db_path)
-		.map_err(|e| format!("Failed to open database {:?}", e))?;
-
-
 	let service = ClientService::start(
 		client_config,
 		&spec,
 		client_state_db,
 		client_blockchain_db,
-		client_trace_db,
 		&snapshot_path,
 		restoration_blockchain_db_handler,
 		&dirs.ipc_path(),

@@ -26,7 +26,7 @@ use ethcore::snapshot::io::{SnapshotReader, PackedReader, PackedWriter};
 use ethcore::snapshot::service::Service as SnapshotService;
 use ethcore::client::{Mode, DatabaseCompactionProfile, VMType};
 use ethcore::miner::Miner;
-use ethcore_db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS, NUM_TRACE_DB_COLUMNS};
+use ethcore_db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS};
 use ethcore_service::ClientService;
 use types::ids::BlockId;
 
@@ -162,7 +162,6 @@ impl SnapshotCommand {
 		// prepare client and snapshot paths.
 		let client_state_db_path = db_dirs.client_state_db_path(algorithm);
 		let client_blockchain_db_path = db_dirs.client_blockchain_db_path(algorithm);
-		let client_trace_db_path = db_dirs.client_trace_db_path(algorithm);
 
 		let snapshot_path = db_dirs.snapshot_path();
 
@@ -196,16 +195,12 @@ impl SnapshotCommand {
 		let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
 			.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-		let restoration_trace_db_handler = db::restoration_db_handler(&client_trace_db_path, &client_config, NUM_TRACE_DB_COLUMNS);
-		let client_trace_db = restoration_trace_db_handler.open(&client_trace_db_path)
-			.map_err(|e| format!("Failed to open database {:?}", e))?;
 
 		let service = ClientService::start(
 			client_config,
 			&spec,
 			client_state_db,
 			client_blockchain_db,
-			client_trace_db,
 			&snapshot_path,
 			restoration_blockchain_db_handler,
 			&self.dirs.ipc_path(),

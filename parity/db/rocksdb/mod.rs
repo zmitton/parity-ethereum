@@ -22,7 +22,6 @@ use std::{io, fs};
 use std::sync::Arc;
 use std::path::Path;
 use blooms_db;
-use ethcore_db::NUM_BLOCKCHAIN_DB_COLUMNS;
 use ethcore::client::{ClientConfig, DatabaseCompactionProfile};
 use kvdb::KeyValueDB;
 use self::ethcore_blockchain::{BlockChainDBHandler, BlockChainDB};

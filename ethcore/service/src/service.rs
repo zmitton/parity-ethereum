@@ -83,7 +83,6 @@ pub struct ClientService {
 	private_tx: Arc<PrivateTxService>,
 	state_db_backing: Arc<BlockChainDB>,
 	blockchain_db_backing: Arc<BlockChainDB>,
-	trace_db_backing: Arc<BlockChainDB>,
 	_stop_guard: StopGuard,
 }
 
@@ -94,7 +93,6 @@ impl ClientService {
 		spec: &Spec,
 		state_db_backing: Arc<BlockChainDB>,
 		blockchain_db_backing: Arc<BlockChainDB>,
-		trace_db_backing: Arc<BlockChainDB>,
 		snapshot_path: &Path,
 		restoration_db_handler: Box<BlockChainDBHandler>,
 		_ipc_path: &Path,
@@ -115,7 +113,6 @@ impl ClientService {
 			&spec,
 			state_db_backing.clone(),
 			blockchain_db_backing.clone(),
-			trace_db_backing.clone(),
 			miner.clone(),
 			io_service.channel(),
 		)?;
@@ -165,7 +162,6 @@ impl ClientService {
 			private_tx,
 			state_db_backing: state_db_backing,
 			blockchain_db_backing: blockchain_db_backing,
-			trace_db_backing: trace_db_backing,
 			_stop_guard: stop_guard,
 		})
 	}

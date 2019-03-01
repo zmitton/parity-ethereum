@@ -199,7 +199,6 @@ pub struct Client {
 	/// Client uses this to store blocks, traces, etc.
     state_db_backing: RwLock<Arc<BlockChainDB>>,
     blockchain_db_backing: RwLock<Arc<BlockChainDB>>,
-    trace_db_backing: RwLock<Arc<BlockChainDB>>,
 
 	state_db: RwLock<StateDB>,
 
@@ -358,9 +357,6 @@ impl Importer {
 	    let blockchain_db_backing = client.blockchain_db_backing.read();
 	    blockchain_db_backing.key_value().flush().expect("DB flush failed.");
 
-	    let trace_db_backing = client.trace_db_backing.read();
-	    trace_db_backing.key_value().flush().expect("DB flush failed.");
-
 		imported
 	}
 
@@ -501,8 +497,7 @@ impl Importer {
 		debug_assert_eq!(header.hash(), block_data.header_view().hash());
 
 	    let mut state_db_batch = DBTransaction::new();
-            let mut blockchain_db_batch = DBTransaction::new();
-            let mut trace_db_batch = DBTransaction::new();
+        let mut blockchain_db_batch = DBTransaction::new();
 
 		let ancestry_actions = self.engine.ancestry_actions(&header, &mut chain.ancestry_with_metadata_iter(*parent));
 
@@ -570,7 +565,7 @@ impl Importer {
 			is_finalized,
 		});
 
-		client.tracedb.read().import(&mut trace_db_batch, TraceImportRequest {
+		client.tracedb.read().import(&mut blockchain_db_batch, TraceImportRequest {
 			traces: traces.into(),
 			block_hash: hash.clone(),
 			block_number: number,
@@ -582,8 +577,7 @@ impl Importer {
 		state.sync_cache(&route.enacted, &route.retracted, is_canon);
 		// Final commit to the DB
 	    client.state_db_backing.read().key_value().write_buffered(state_db_batch);
-            client.blockchain_db_backing.read().key_value().write_buffered(blockchain_db_batch);
-            client.trace_db_backing.read().key_value().write_buffered(trace_db_batch);
+        client.blockchain_db_backing.read().key_value().write_buffered(blockchain_db_batch);
 
 		chain.commit();
 
@@ -723,7 +717,6 @@ impl Client {
 		spec: &Spec,
 	    state_db_backing: Arc<BlockChainDB>,
         blockchain_db_backing: Arc<BlockChainDB>,
-        trace_db_backing: Arc<BlockChainDB>,
 		miner: Arc<Miner>,
 		message_channel: IoChannel<ClientIoMessage>,
 	) -> Result<Arc<Client>, ::error::Error> {
@@ -751,7 +744,7 @@ impl Client {
 
 		let gb = spec.genesis_block();
 		let chain = Arc::new(BlockChain::new(config.blockchain.clone(), &gb, blockchain_db_backing.clone()));
-		let tracedb = RwLock::new(TraceDB::new(config.tracing.clone(), trace_db_backing.clone(), chain.clone()));
+		let tracedb = RwLock::new(TraceDB::new(config.tracing.clone(), blockchain_db_backing.clone(), chain.clone()));
 
 		trace!("Cleanup journal: DB Earliest = {:?}, Latest = {:?}", state_db.journal_db().earliest_era(), state_db.journal_db().latest_era());
 
@@ -789,8 +782,7 @@ impl Client {
 			engine: engine,
 			pruning: config.pruning.clone(),
 		    state_db_backing: RwLock::new(state_db_backing.clone()),
-                    blockchain_db_backing: RwLock::new(blockchain_db_backing.clone()),
-                    trace_db_backing: RwLock::new(trace_db_backing.clone()),
+            blockchain_db_backing: RwLock::new(blockchain_db_backing.clone()),
 			state_db: RwLock::new(state_db),
 			report: RwLock::new(Default::default()),
 			io_channel: RwLock::new(message_channel),
@@ -852,7 +844,6 @@ impl Client {
 		// ensure buffered changes are flushed.
 		client.state_db_backing.read().key_value().flush()?;
 	    client.blockchain_db_backing.read().key_value().flush()?;
-            client.trace_db_backing.read().key_value().flush()?;
 
 		Ok(client)
 	}
@@ -1350,12 +1341,8 @@ impl snapshot::DatabaseRestore for Client {
 			blockchain_db_backing.restore(new_blockchain_db)?;
 
 			*chain = Arc::new(BlockChain::new(self.config.blockchain.clone(), &[], blockchain_db_backing.clone()));
-		}
-		{
-			let trace_db_backing = self.trace_db_backing.write();
-			trace_db_backing.restore(new_trace_db)?;
 
-			*tracedb = TraceDB::new(self.config.tracing.clone(), trace_db_backing.clone(), chain.clone());
+			*tracedb = TraceDB::new(self.config.tracing.clone(), blockchain_db_backing.clone(), chain.clone());
 		}
 
 		Ok(())
@@ -2454,7 +2441,6 @@ impl ImportSealedBlock for Client {
 
 		self.state_db_backing.read().key_value().flush().expect("DB flush failed.");
 		self.blockchain_db_backing.read().key_value().flush().expect("DB flush failed.");
-		self.trace_db_backing.read().key_value().flush().expect("DB flush failed.");
 
 		Ok(hash)
 	}
