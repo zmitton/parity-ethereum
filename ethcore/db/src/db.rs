@@ -28,7 +28,7 @@ use rlp;
 /// Column for State
 pub const COL_STATE: Option<u32> = Some(0);
 /// Number of columns in DB
-pub const NUM_STATE_DB_COLUMNS: Option<u32> = Some(2);
+pub const NUM_STATE_DB_COLUMNS: Option<u32> = Some(1);
 
 /// Column for Block headers
 pub const COL_HEADERS: Option<u32> = Some(0);

@@ -161,7 +161,6 @@ mod test {
 
 		let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
 		let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-		let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
 
 		let tempdir = TempDir::new("").unwrap();
 		let spec = Spec::load(&tempdir.path(), spec_data.as_bytes()).unwrap();
@@ -171,7 +170,6 @@ mod test {
 			&spec,
 			state_db,
 			blockchain_db,
-			trace_db,
 			Arc::new(Miner::new_for_tests(&spec, None)),
 			IoChannel::disconnected(),
 		).unwrap();
@@ -245,7 +243,6 @@ mod test {
 
 		let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
 		let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-		let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
 
 		let tempdir = TempDir::new("").unwrap();
 		let spec = Spec::load(&tempdir.path(), spec_data.as_bytes()).unwrap();
@@ -255,7 +252,6 @@ mod test {
 			&spec,
 			state_db,
 			blockchain_db,
-			trace_db,
 			Arc::new(Miner::new_for_tests(&spec, None)),
 			IoChannel::disconnected(),
 		).unwrap();

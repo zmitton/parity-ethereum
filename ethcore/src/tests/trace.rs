@@ -40,7 +40,6 @@ use types::views::BlockView;
 fn can_trace_block_and_uncle_reward() {
 	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
 	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-	let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
 
 	let spec = Spec::new_test_with_reward();
 	let engine = &*spec.engine;
@@ -53,7 +52,6 @@ fn can_trace_block_and_uncle_reward() {
 		&spec,
 		state_db,
 		blockchain_db,
-		trace_db,
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();

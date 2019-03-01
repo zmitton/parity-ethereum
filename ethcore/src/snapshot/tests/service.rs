@@ -53,7 +53,6 @@ fn restored_is_equivalent() {
 	let blockchain_db = restoration.open(&client_db).unwrap();
 
 	let a_db = new_temp_db(&path.join("a"), ::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-	let b_db = new_temp_db(&path.join("b"), ::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 
 	let spec = Spec::new_null();
 	let client2 = Client::new(
@@ -61,7 +60,6 @@ fn restored_is_equivalent() {
 		&spec,
 		blockchain_db,
 		a_db,
-		b_db,
 		Arc::new(::miner::Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -215,7 +213,6 @@ fn keep_ancient_blocks() {
 		&spec,
 		client_db.clone(),
 		client_db.clone(),
-		client_db.clone(),
 		Arc::new(::miner::Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -290,7 +287,6 @@ fn recover_aborted_recovery() {
 	let client2 = Client::new(
 		Default::default(),
 		&spec,
-		client_db.clone(),
 		client_db.clone(),
 		client_db.clone(),
 		Arc::new(::miner::Miner::new_for_tests(&spec, None)),

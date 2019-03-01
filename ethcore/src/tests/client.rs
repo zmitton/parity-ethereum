@@ -45,7 +45,6 @@ use verification::queue::kind::blocks::Unverified;
 fn imports_from_empty() {
 	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
 	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-	let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
 
 	let spec = Spec::new_test();
 
@@ -54,7 +53,6 @@ fn imports_from_empty() {
 		&spec,
 		state_db,
 		blockchain_db,
-		trace_db,
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -66,7 +64,6 @@ fn imports_from_empty() {
 fn should_return_registrar() {
 	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
 	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-	let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
 
 	let tempdir = TempDir::new("").unwrap();
 	let spec = ethereum::new_morden(&tempdir.path().to_owned());
@@ -76,7 +73,6 @@ fn should_return_registrar() {
 		&spec,
 		state_db,
 		blockchain_db,
-		trace_db,
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -100,7 +96,6 @@ fn returns_state_root_basic() {
 fn imports_good_block() {
 	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
 	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-	let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
 
 	let spec = Spec::new_test();
 
@@ -109,7 +104,6 @@ fn imports_good_block() {
 		&spec,
 		state_db,
 		blockchain_db,
-		trace_db,
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -128,7 +122,6 @@ fn imports_good_block() {
 fn query_none_block() {
 	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
 	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-	let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
 
 	let spec = Spec::new_test();
 
@@ -137,7 +130,6 @@ fn query_none_block() {
 		&spec,
 		state_db,
 		blockchain_db,
-		trace_db,
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -281,7 +273,6 @@ fn can_mine() {
 fn change_history_size() {
 	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
 	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-	let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
 
 	let test_spec = Spec::new_null();
 	let mut config = ClientConfig::default();
@@ -294,7 +285,6 @@ fn change_history_size() {
 			&test_spec,
 			state_db.clone(),
 			blockchain_db.clone(),
-			trace_db.clone(),
 			Arc::new(Miner::new_for_tests(&test_spec, None)),
 			IoChannel::disconnected()
 		).unwrap();
@@ -314,7 +304,6 @@ fn change_history_size() {
 		&test_spec,
 		state_db,
 		blockchain_db,
-		trace_db,
 		Arc::new(Miner::new_for_tests(&test_spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
