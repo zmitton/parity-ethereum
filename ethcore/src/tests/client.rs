@@ -43,15 +43,18 @@ use verification::queue::kind::blocks::Unverified;
 
 #[test]
 fn imports_from_empty() {
-	let db = test_helpers::new_db();
+	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
+	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
+
 	let spec = Spec::new_test();
 
 	let client = Client::new(
 		ClientConfig::default(),
 		&spec,
-		db.clone(),
-		db.clone(),
-		db.clone(),
+		state_db,
+		blockchain_db,
+		trace_db,
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -61,16 +64,19 @@ fn imports_from_empty() {
 
 #[test]
 fn should_return_registrar() {
-	let db = test_helpers::new_db();
+	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
+	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
+
 	let tempdir = TempDir::new("").unwrap();
 	let spec = ethereum::new_morden(&tempdir.path().to_owned());
 
 	let client = Client::new(
 		ClientConfig::default(),
 		&spec,
-		db.clone(),
-		db.clone(),
-		db.clone(),
+		state_db,
+		blockchain_db,
+		trace_db,
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -92,15 +98,18 @@ fn returns_state_root_basic() {
 
 #[test]
 fn imports_good_block() {
-	let db = test_helpers::new_db();
+	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
+	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
+
 	let spec = Spec::new_test();
 
 	let client = Client::new(
 		ClientConfig::default(),
 		&spec,
-		db.clone(),
-		db.clone(),
-		db.clone(),
+		state_db,
+		blockchain_db,
+		trace_db,
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -117,15 +126,18 @@ fn imports_good_block() {
 
 #[test]
 fn query_none_block() {
-	let db = test_helpers::new_db();
+	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
+	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
+
 	let spec = Spec::new_test();
 
 	let client = Client::new(
 		ClientConfig::default(),
 		&spec,
-		db.clone(),
-		db.clone(),
-		db.clone(),
+		state_db,
+		blockchain_db,
+		trace_db,
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -267,7 +279,10 @@ fn can_mine() {
 
 #[test]
 fn change_history_size() {
-	let db = test_helpers::new_db();
+	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
+	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
+
 	let test_spec = Spec::new_null();
 	let mut config = ClientConfig::default();
 
@@ -277,9 +292,9 @@ fn change_history_size() {
 		let client = Client::new(
 			ClientConfig::default(),
 			&test_spec,
-			db.clone(),
-			db.clone(),
-			db.clone(),
+			state_db.clone(),
+			blockchain_db.clone(),
+			trace_db.clone(),
 			Arc::new(Miner::new_for_tests(&test_spec, None)),
 			IoChannel::disconnected()
 		).unwrap();
@@ -297,9 +312,9 @@ fn change_history_size() {
 	let client = Client::new(
 		config,
 		&test_spec,
-		db.clone(),
-		db.clone(),
-		db.clone(),
+		state_db,
+		blockchain_db,
+		trace_db,
 		Arc::new(Miner::new_for_tests(&test_spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();

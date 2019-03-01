@@ -48,12 +48,12 @@ fn restored_is_equivalent() {
 	let client_db = tempdir.path().join("client_db");
 	let path = tempdir.path().join("snapshot");
 
-	let db_config = DatabaseConfig::with_columns(::db::NUM_COLUMNS);
+	let db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 	let restoration = restoration_db_handler(db_config);
 	let blockchain_db = restoration.open(&client_db).unwrap();
 
-	let a_db = new_temp_db(&path.join("a"));
-	let b_db = new_temp_db(&path.join("b"));
+	let a_db = new_temp_db(&path.join("a"), ::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let b_db = new_temp_db(&path.join("b"), ::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 
 	let spec = Spec::new_null();
 	let client2 = Client::new(
@@ -118,7 +118,7 @@ fn guards_delete_folders() {
 	let service_params = ServiceParams {
 		engine: spec.engine.clone(),
 		genesis_block: spec.genesis_block(),
-		restoration_db_handler: restoration_db_handler(DatabaseConfig::with_columns(::db::NUM_COLUMNS)),
+		restoration_db_handler: restoration_db_handler(DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS)),
 		pruning: ::journaldb::Algorithm::Archive,
 		channel: IoChannel::disconnected(),
 		snapshot_root: tempdir.path().to_owned(),
@@ -208,8 +208,8 @@ fn keep_ancient_blocks() {
 	writer.into_inner().finish(manifest.clone()).unwrap();
 
 	// Initialize the Client
-	let db_config = DatabaseConfig::with_columns(::db::NUM_COLUMNS);
-	let client_db = new_temp_db(&tempdir.path());
+	let db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let client_db = new_temp_db(&tempdir.path(), ::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 	let client2 = Client::new(
 		ClientConfig::default(),
 		&spec,
@@ -285,8 +285,8 @@ fn recover_aborted_recovery() {
 
 	let spec = Spec::new_null();
 	let tempdir = TempDir::new("").unwrap();
-	let db_config = DatabaseConfig::with_columns(::db::NUM_COLUMNS);
-	let client_db = new_db();
+	let db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let client_db = new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 	let client2 = Client::new(
 		Default::default(),
 		&spec,

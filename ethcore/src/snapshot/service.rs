@@ -920,7 +920,7 @@ mod tests {
 
 		let state_hashes: Vec<_> = (0..5).map(|_| H256::random()).collect();
 		let block_hashes: Vec<_> = (0..5).map(|_| H256::random()).collect();
-		let db_config = DatabaseConfig::with_columns(::db::NUM_COLUMNS);
+		let db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 		let gb = spec.genesis_block();
 		let flag = ::std::sync::atomic::AtomicBool::new(true);
 

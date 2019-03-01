@@ -159,16 +159,19 @@ mod test {
 	fn transaction_filter() {
 		let spec_data = include_str!("../res/tx_permission_tests/contract_ver_2_genesis.json");
 
-		let db = test_helpers::new_db();
+		let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
+		let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+		let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
+
 		let tempdir = TempDir::new("").unwrap();
 		let spec = Spec::load(&tempdir.path(), spec_data.as_bytes()).unwrap();
 
 		let client = Client::new(
 			ClientConfig::default(),
 			&spec,
-			db.clone(),
-			db.clone(),
-			db.clone(),
+			state_db,
+			blockchain_db,
+			trace_db,
 			Arc::new(Miner::new_for_tests(&spec, None)),
 			IoChannel::disconnected(),
 		).unwrap();
@@ -240,16 +243,19 @@ mod test {
 	fn transaction_filter_deprecated() {
 		let spec_data = include_str!("../res/tx_permission_tests/deprecated_contract_genesis.json");
 
-		let db = test_helpers::new_db();
+		let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
+		let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+		let trace_db = test_helpers::new_db(::db::NUM_TRACE_DB_COLUMNS);
+
 		let tempdir = TempDir::new("").unwrap();
 		let spec = Spec::load(&tempdir.path(), spec_data.as_bytes()).unwrap();
 
 		let client = Client::new(
 			ClientConfig::default(),
 			&spec,
-			db.clone(),
-			db.clone(),
-			db.clone(),
+			state_db,
+			blockchain_db,
+			trace_db,
 			Arc::new(Miner::new_for_tests(&spec, None)),
 			IoChannel::disconnected(),
 		).unwrap();
