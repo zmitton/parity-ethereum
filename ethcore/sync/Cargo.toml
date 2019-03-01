@@ -13,6 +13,7 @@ db-utils = { path = "../../util/db" }
 env_logger = "0.5"
 ethcore = { path = ".." }
 ethcore-blockchain = { path = "../blockchain" }
+ethcore-bloom-journal = { path = "../../util/bloom" }
 ethcore-db = { path = "../db" }
 ethcore-io = { path = "../../util/io" }
 ethcore-light = { path = "../light" }

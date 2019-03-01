@@ -1406,6 +1406,7 @@ impl ChainSync {
 		// Restart the sync when FastWarp is done
 		match self.state {
 			SyncState::FastWarp if self.fast_warp.is_done() => {
+				io.chain().state_db().reload_blooms();
 				self.restart(io);
 			},
 			_ => (),

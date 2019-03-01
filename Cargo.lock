@@ -1101,6 +1101,7 @@ dependencies = [
  "env_logger 0.5.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethcore 1.12.0",
  "ethcore-blockchain 0.1.0",
+ "ethcore-bloom-journal 0.1.0",
  "ethcore-db 0.1.0",
  "ethcore-io 1.12.0",
  "ethcore-light 1.12.0",

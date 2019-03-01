@@ -25,6 +25,7 @@ extern crate common_types as types;
 extern crate db_utils;
 extern crate ethcore;
 extern crate ethcore_blockchain;
+extern crate ethcore_bloom_journal as bloom_journal;
 extern crate ethcore_db;
 extern crate ethcore_io as io;
 extern crate ethcore_network as network;

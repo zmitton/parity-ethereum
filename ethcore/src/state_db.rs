@@ -182,6 +182,12 @@ impl StateDB {
 		bloom
 	}
 
+	/// Reload the blooms from DB
+	pub fn reload_blooms(&mut self) {
+		let bloom = Self::load_bloom(&**self.db.backing());
+		self.account_bloom = Arc::new(Mutex::new(bloom));
+	}
+
 	/// Commit blooms journal to the database transaction
 	pub fn commit_bloom(batch: &mut DBTransaction, journal: BloomJournal) {
 		assert!(journal.hash_functions <= 255);
@@ -402,19 +408,6 @@ impl StateDB {
 		}
 		trace!("Cache lookup skipped for {:?}: parent hash is unknown", addr);
 		false
-	}
-
-	/// Note the given account's hash as non-null in the Blooms
-	pub fn note_non_null_account_hash(&self, account_hash: &H256) {
-		trace!(target: "account_bloom", "Note account_hash bloom: {:#?}", account_hash);
-		let mut bloom = self.account_bloom.lock();
-		bloom.set(&*account_hash);
-	}
-
-	/// Journal the bloom to the given DB transaction batch
-	pub fn journal_bloom(&mut self, batch: &mut DBTransaction) {
-		let mut bloom_lock = self.account_bloom.lock();
-		Self::commit_bloom(batch, bloom_lock.drain_journal());
 	}
 }
 

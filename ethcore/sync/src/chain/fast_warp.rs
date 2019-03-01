@@ -20,6 +20,7 @@ use std::time::Instant;
 // use ethcore_blockchain::{BlockChainDB};
 use block_sync::{BlockDownloader, BlockRequest, BlockDownloaderImportError as DownloaderImportError};
 use blocks::{SyncHeader};
+use bloom_journal::Bloom;
 use bytes::Bytes;
 use ethcore::account_db::{AccountDBMut};
 use ethcore::state_db::StateDB;
@@ -155,11 +156,17 @@ pub struct StateDownloader {
 	last_storage_root: H256,
 	/// To compute ETA
 	started_at: Instant,
+	/// Underlaying JournalDB
+	db: Box<JournalDB>,
+	/// Bloom
+	bloom: Bloom,
 }
 
 impl StateDownloader {
 	/// Create a new State Downloader
-	pub fn new() -> Self {
+	pub fn new(db: Box<JournalDB>) -> Self {
+		let bloom = StateDB::load_bloom(&**db.backing());
+
 		StateDownloader {
 			next_account_from: H256::zero(),
 			// Sensibly large account on Kovan
@@ -168,6 +175,7 @@ impl StateDownloader {
 			last_account_hash: H256::zero(),
 			last_storage_root: H256::zero(),
 			started_at: Instant::now(),
+			db, bloom,
 		}
 	}
 
@@ -177,8 +185,7 @@ impl StateDownloader {
 	}
 
 	/// Process incoming packet
-	pub fn process(&mut self, r: &Rlp, state_db: &mut StateDB, state_root: &mut H256) -> FastWarpAction {
-		let db = &mut state_db.journal_db().boxed_clone();
+	pub fn process(&mut self, r: &Rlp, state_root: &mut H256) -> FastWarpAction {
 		let empty_rlp = StateAccount::new_basic(U256::zero(), U256::zero()).rlp();
 
 		// This should be [account_hash, storage_key, storage_root]
@@ -195,14 +202,14 @@ impl StateDownloader {
 		let mut should_finish = false;
 
 		{
-			let hashdb = db.as_hashdb_mut();
+			let hashdb = self.db.as_hashdb_mut();
 
 			for (idx, (account_rlp, account_pair)) in r.into_iter().zip(account_pairs.iter_mut()).enumerate() {
 				let account_hash: H256 = account_rlp.val_at(0).expect("Invalid account_hash");
 
 				let mut acct_db = AccountDBMut::from_hash(hashdb, account_hash);
 				let mut storage_root = if self.last_account_hash == account_hash {
-					self.last_storage_root
+					self.last_storage_root.clone()
 				}  else {
 					H256::zero()
 				};
@@ -280,7 +287,7 @@ impl StateDownloader {
 		}
 
 		if should_finish {
-			FastWarp::commit(state_db);
+			FastWarp::commit(&mut self.db, &mut self.bloom);
 			return FastWarpAction::NextStep;
 		}
 
@@ -299,21 +306,21 @@ impl StateDownloader {
 
 		{
 			let mut account_trie = if *state_root != KECCAK_NULL_RLP {
-				TrieDBMut::from_existing(db.as_hashdb_mut(), state_root).expect("Could not get TrieDB from_existing in StateDL::process")
+				TrieDBMut::from_existing(self.db.as_hashdb_mut(), state_root).expect("Could not get TrieDB from_existing in StateDL::process")
 			} else {
-				TrieDBMut::new(db.as_hashdb_mut(), state_root)
+				TrieDBMut::new(self.db.as_hashdb_mut(), state_root)
 			};
 
 			for (hash, thin_rlp) in account_pairs {
-				if &thin_rlp[..] != &empty_rlp[..] {
-					state_db.note_non_null_account_hash(&hash);
-				}
-
 				account_trie.insert(&hash, &thin_rlp).expect("Could not call account_trie.insert in StateDL::process");
+
+				if &thin_rlp[..] != &empty_rlp[..] {
+					self.bloom.set(&*hash);
+				}
 			}
 		}
 
-		FastWarp::commit(state_db);
+		FastWarp::commit(&mut self.db, &mut self.bloom);
 		self.update(last_item.0, last_item.1, last_item.2);
 		FastWarpAction::Continue
 	}
@@ -342,13 +349,18 @@ pub struct TrieDownloader {
 	node_data_prefixes: HashMap<H256, Vec<u8>>,
 	// What requests have been sent
 	node_data_requests: HashMap<H256, NodeDataRequest>,
+	/// Underlaying JournalDB
+	db: Box<JournalDB>,
+	/// Bloom
+	bloom: Bloom,
 }
 
 impl TrieDownloader {
 	/// Create a new Trie Downloader, targeting the given state root
-	pub fn new(target: H256) -> Self {
+	pub fn new(db: Box<JournalDB>, target: H256) -> Self {
 		trace!(target: "fast-warp", "Starting Trie-Dl with target={:#?}", target);
 		let mut node_data_requests = HashMap::new();
+		let bloom = StateDB::load_bloom(&**db.backing());
 
 		// First, query the head of the state tree
 		node_data_requests.insert(target, NodeDataRequest::State);
@@ -361,6 +373,7 @@ impl TrieDownloader {
 			node_data_queries,
 			node_data_requests,
 			target,
+			db, bloom,
 		}
 	}
 
@@ -383,255 +396,256 @@ impl TrieDownloader {
 	}
 
 	/// Process incoming packet
-	pub fn process(&mut self, peer_id: PeerId, r: &Rlp, state_db: &mut StateDB, state_root: &mut H256) -> Result<FastWarpAction, DownloaderImportError> {
-		let db = &mut state_db.journal_db().boxed_clone();
+	pub fn process(&mut self, peer_id: PeerId, r: &Rlp, state_root: &mut H256) -> Result<FastWarpAction, DownloaderImportError> {
 		let empty_rlp = StateAccount::new_basic(U256::zero(), U256::zero()).rlp();
 
-		let node_data_hashes = match self.in_flight_requests.get(&peer_id) {
-			Some(vec) => vec,
-			None => return Ok(FastWarpAction::Continue),
-		};
+		{
+			let node_data_hashes = match self.in_flight_requests.get(&peer_id) {
+				Some(vec) => vec,
+				None => return Ok(FastWarpAction::Continue),
+			};
 
-		if node_data_hashes.len() != r.item_count()? {
-			debug!(target: "sync",
-				"Invalid NodeData RLP: asked for {} hashes, got {} items",
-				node_data_hashes.len(),
-				r.item_count()?,
-			);
+			if node_data_hashes.len() != r.item_count()? {
+				debug!(target: "sync",
+					"Invalid NodeData RLP: asked for {} hashes, got {} items",
+					node_data_hashes.len(),
+					r.item_count()?,
+				);
 
-			for node_data_hash in node_data_hashes.iter() {
-				self.node_data_queries.insert(*node_data_hash);
+				for node_data_hash in node_data_hashes.iter() {
+					self.node_data_queries.insert(*node_data_hash);
+				}
+
+				return Err(DownloaderImportError::Invalid);
 			}
 
-			return Err(DownloaderImportError::Invalid);
-		}
+			let mut accounts_to_insert = Vec::new();
 
-		let mut accounts_to_insert = Vec::new();
+			for (rlp_data, node_data_key) in r.iter().zip(node_data_hashes) {
+				let request = self.node_data_requests.remove(&node_data_key).expect("Could not remove node data request");
+				let state_data: Bytes = rlp_data.data()?.to_vec();
 
-		for (rlp_data, node_data_key) in r.iter().zip(node_data_hashes) {
-			let request = self.node_data_requests.remove(&node_data_key).expect("Could not remove node data request");
-			let state_data: Bytes = rlp_data.data()?.to_vec();
+				match request {
+					NodeDataRequest::Code(account_hash) => {
+						let mut acct_db = AccountDBMut::from_hash(self.db.as_hashdb_mut(), account_hash);
+						// Insert the data in DB
+						let inserted_key = acct_db.insert(&state_data);
+						if inserted_key != *node_data_key {
+							warn!("Inserted invalid code data, expected={:#?} found={:#?}", inserted_key, *node_data_key);
+						}
+						continue;
+					},
+					NodeDataRequest::State => {
+						// Insert the data in DB
+						let inserted_key = self.db.as_hashdb_mut().insert(&state_data);
+						if inserted_key != *node_data_key {
+							warn!("Inserted invalid state data, expected={:#?} found={:#?}", inserted_key, *node_data_key);
+						}
+					},
+					NodeDataRequest::Storage(account_hash) => {
+						let mut acct_db = AccountDBMut::from_hash(self.db.as_hashdb_mut(), account_hash);
+						// Insert the data in DB
+						let inserted_key = acct_db.insert(&state_data);
+						if inserted_key != *node_data_key {
+							warn!("Inserted invalid storage data, expected={:#?} found={:#?}", inserted_key, *node_data_key);
+						}
+					},
+				}
 
-			match request {
-				NodeDataRequest::Code(account_hash) => {
-					let mut acct_db = AccountDBMut::from_hash(db.as_hashdb_mut(), account_hash);
-					// Insert the data in DB
-					let inserted_key = acct_db.insert(&state_data);
-					if inserted_key != *node_data_key {
-						warn!("Inserted invalid code data, expected={:#?} found={:#?}", inserted_key, *node_data_key);
-					}
-					continue;
-				},
-				NodeDataRequest::State => {
-					// Insert the data in DB
-					let inserted_key = db.as_hashdb_mut().insert(&state_data);
-					if inserted_key != *node_data_key {
-						warn!("Inserted invalid state data, expected={:#?} found={:#?}", inserted_key, *node_data_key);
-					}
-				},
-				NodeDataRequest::Storage(account_hash) => {
-					let mut acct_db = AccountDBMut::from_hash(db.as_hashdb_mut(), account_hash);
-					// Insert the data in DB
-					let inserted_key = acct_db.insert(&state_data);
-					if inserted_key != *node_data_key {
-						warn!("Inserted invalid storage data, expected={:#?} found={:#?}", inserted_key, *node_data_key);
-					}
-				},
-			}
+				let node = RlpCodec::decode(&state_data)?;
 
-			let node = RlpCodec::decode(&state_data)?;
+				let prefix = self.node_data_prefixes.remove(&node_data_key).unwrap_or_default();
+				// The request that was sent should always exist!
+				self.node_data_queries.remove(&node_data_key);
 
-			let prefix = self.node_data_prefixes.remove(&node_data_key).unwrap_or_default();
-			// The request that was sent should always exist!
-			self.node_data_queries.remove(&node_data_key);
+				match node {
+					Node::Empty => (),
+					Node::Leaf(path, data) => {
 
-			match node {
-				Node::Empty => (),
-				Node::Leaf(path, data) => {
+						let prefix_len = prefix.len();
+						let mut nibble_builder = Vec::new();
+						let mut i = 0;
+						let mut offset = 0;
+						if prefix_len % 2 == 1 {
+							nibble_builder.push(prefix[0]);
+							i = 1;
+							offset = 1;
+						}
+						while i < prefix_len {
+							nibble_builder.push(16 * prefix[i] + prefix[i + 1]);
+							i += 2;
+						}
 
-					let prefix_len = prefix.len();
-					let mut nibble_builder = Vec::new();
-					let mut i = 0;
-					let mut offset = 0;
-					if prefix_len % 2 == 1 {
-						nibble_builder.push(prefix[0]);
-						i = 1;
-						offset = 1;
-					}
-					while i < prefix_len {
-						nibble_builder.push(16 * prefix[i] + prefix[i + 1]);
-						i += 2;
-					}
+						let nibble_prefix = NibbleSlice::new_offset(&nibble_builder, offset);
+						let hash_nible = NibbleSlice::new_composed(&nibble_prefix, &path);
 
-					let nibble_prefix = NibbleSlice::new_offset(&nibble_builder, offset);
-					let hash_nible = NibbleSlice::new_composed(&nibble_prefix, &path);
+						let key_vec = hash_nible.encoded(false);
+						// First byte is 0 if length is even ; it should always be 32
+						let key = H256::from_slice(&key_vec[1..]);
+						// warn!("Got NodeLeaf: r={:?} ; k={:?} ; data={:?}", request, key, data);
 
-					let key_vec = hash_nible.encoded(false);
-					// First byte is 0 if length is even ; it should always be 32
-					let key = H256::from_slice(&key_vec[1..]);
-					// warn!("Got NodeLeaf: r={:?} ; k={:?} ; data={:?}", request, key, data);
+						match request {
+							NodeDataRequest::State => {
+								let account_hash = key;
+								let account: BasicAccount = Rlp::new(data).as_val()?;
+								accounts_to_insert.push((account_hash, account));
+							},
+							NodeDataRequest::Storage(_account_hash) => {
+								// let account = {
+								// 	let account_trie = if *state_root != KECCAK_NULL_RLP {
+								// 		TrieDBMut::from_existing(db.as_hashdb_mut(), state_root).expect("Could not get account_trie")
+								// 	} else {
+								// 		TrieDBMut::new(db.as_hashdb_mut(), state_root)
+								// 	};
+								// 	account_trie.get(&account_hash).expect("Could not account_trie::get ").map(|bytes| -> BasicAccount {
+								// 		Rlp::new(&bytes).as_val().expect("Invalid Account data in DB")
+								// 	})
+								// };
 
-					match request {
-						NodeDataRequest::State => {
-							let account_hash = key;
-							let account: BasicAccount = Rlp::new(data).as_val()?;
-							accounts_to_insert.push((account_hash, account));
-						},
-						NodeDataRequest::Storage(_account_hash) => {
-							// let account = {
-							// 	let account_trie = if *state_root != KECCAK_NULL_RLP {
-							// 		TrieDBMut::from_existing(db.as_hashdb_mut(), state_root).expect("Could not get account_trie")
-							// 	} else {
-							// 		TrieDBMut::new(db.as_hashdb_mut(), state_root)
-							// 	};
-							// 	account_trie.get(&account_hash).expect("Could not account_trie::get ").map(|bytes| -> BasicAccount {
-							// 		Rlp::new(&bytes).as_val().expect("Invalid Account data in DB")
-							// 	})
-							// };
+								// match account {
+								// 	None => {
+								// 		warn!(target: "fast-warp", "Could not find account {:#} in DB", account_hash);
+								// 	},
+								// 	Some(account) => {
+								// 		let mut acct_db = AccountDBMut::from_hash(db.as_hashdb_mut(), account_hash);
+								// 		let mut storage_root = account.storage_root.clone();
 
-							// match account {
-							// 	None => {
-							// 		warn!(target: "fast-warp", "Could not find account {:#} in DB", account_hash);
-							// 	},
-							// 	Some(account) => {
-							// 		let mut acct_db = AccountDBMut::from_hash(db.as_hashdb_mut(), account_hash);
-							// 		let mut storage_root = account.storage_root.clone();
+								// 		let mut storage_trie = if storage_root.is_zero() {
+								// 			TrieDBMut::new(&mut acct_db, &mut storage_root)
+								// 		} else {
+								// 			TrieDBMut::from_existing(&mut acct_db, &mut storage_root).expect("Could not get storage_trie")
+								// 		};
 
-							// 		let mut storage_trie = if storage_root.is_zero() {
-							// 			TrieDBMut::new(&mut acct_db, &mut storage_root)
-							// 		} else {
-							// 			TrieDBMut::from_existing(&mut acct_db, &mut storage_root).expect("Could not get storage_trie")
-							// 		};
-
-							// 		storage_trie.insert(&key, &data).expect("Could not insert in storage_trie");
-							// 	},
-							// }
-						},
-						_ => {
-							warn!("Got request...");
-						},
-					}
-				},
-				Node::Extension(path, key_bytes) => {
-					let key_rlp = Rlp::new(key_bytes);
-					let key: H256 = match key_rlp.prototype()? {
-						Prototype::Null => continue,
-						Prototype::Data(0) => continue,
-						Prototype::Data(32) => key_rlp.as_val()?,
-						proto => {
-							warn!("Invalid Extension Key RLP: {:?}", proto);
-							continue;
-						},
-					};
-
-					if !db.as_hashdb().contains(&key) {
-						let mut ext_prefixes = prefix.clone();
-						let mut path_nibbles: Vec<u8> = path.iter().collect();
-						ext_prefixes.append(&mut path_nibbles);
-
-						self.node_data_prefixes.insert(key, ext_prefixes);
-						self.node_data_requests.insert(key, request.clone());
-						self.node_data_queries.insert(key);
-					} else {
-						self.common_nodes.insert(key);
-					}
-				},
-				Node::Branch(branches, data_opt) => {
-					for (branch_idx, branch_rlp) in branches.iter().enumerate() {
-						let branch_rlp = Rlp::new(branch_rlp);
-						let branch_key: H256 = match branch_rlp.prototype()? {
+								// 		storage_trie.insert(&key, &data).expect("Could not insert in storage_trie");
+								// 	},
+								// }
+							},
+							_ => {
+								warn!("Got request...");
+							},
+						}
+					},
+					Node::Extension(path, key_bytes) => {
+						let key_rlp = Rlp::new(key_bytes);
+						let key: H256 = match key_rlp.prototype()? {
 							Prototype::Null => continue,
 							Prototype::Data(0) => continue,
-							Prototype::Data(32) => {
-								branch_rlp.as_val()?
-							},
+							Prototype::Data(32) => key_rlp.as_val()?,
 							proto => {
-								error!("Invalid branch RLP: {:?}", proto);
+								warn!("Invalid Extension Key RLP: {:?}", proto);
 								continue;
 							},
 						};
 
-						if !db.as_hashdb().contains(&branch_key) {
-							// trace!(target: "sync", "Doesn't have branch in DB {:#?}", branch_key);
-							let mut branch_prefixes = prefix.clone();
-							branch_prefixes.push(branch_idx as u8);
-							self.node_data_prefixes.insert(branch_key, branch_prefixes);
-							self.node_data_requests.insert(branch_key, request.clone());
-							self.node_data_queries.insert(branch_key);
+						if !self.db.as_hashdb().contains(&key) {
+							let mut ext_prefixes = prefix.clone();
+							let mut path_nibbles: Vec<u8> = path.iter().collect();
+							ext_prefixes.append(&mut path_nibbles);
+
+							self.node_data_prefixes.insert(key, ext_prefixes);
+							self.node_data_requests.insert(key, request.clone());
+							self.node_data_queries.insert(key);
 						} else {
-							self.common_nodes.insert(branch_key);
+							self.common_nodes.insert(key);
+						}
+					},
+					Node::Branch(branches, data_opt) => {
+						for (branch_idx, branch_rlp) in branches.iter().enumerate() {
+							let branch_rlp = Rlp::new(branch_rlp);
+							let branch_key: H256 = match branch_rlp.prototype()? {
+								Prototype::Null => continue,
+								Prototype::Data(0) => continue,
+								Prototype::Data(32) => {
+									branch_rlp.as_val()?
+								},
+								proto => {
+									error!("Invalid branch RLP: {:?}", proto);
+									continue;
+								},
+							};
+
+							if !self.db.as_hashdb().contains(&branch_key) {
+								// trace!(target: "sync", "Doesn't have branch in DB {:#?}", branch_key);
+								let mut branch_prefixes = prefix.clone();
+								branch_prefixes.push(branch_idx as u8);
+								self.node_data_prefixes.insert(branch_key, branch_prefixes);
+								self.node_data_requests.insert(branch_key, request.clone());
+								self.node_data_queries.insert(branch_key);
+							} else {
+								self.common_nodes.insert(branch_key);
+							}
+						}
+						if let Some(branch_data) = data_opt {
+							warn!("Node Branch Data: r={:?} ; d={:#?}", request, branch_data);
+						}
+					},
+				}
+			}
+
+			if accounts_to_insert.len() > 0 {
+				// trace!(target: "sync", "New/Modified accounts detected!\n{:#?}", accounts_to_insert);
+
+				let mut storage_root_queries = HashSet::new();
+				let mut code_hash_queries = HashSet::new();
+
+				{
+					let db = self.db.as_hashdb_mut();
+					for (account_hash, account) in accounts_to_insert.iter() {
+						let acct_db = AccountDBMut::from_hash(db, *account_hash);
+
+						if account.storage_root != KECCAK_NULL_RLP && !acct_db.contains(&account.storage_root) {
+							storage_root_queries.insert(account.storage_root);
+
+							self.node_data_requests.insert(account.storage_root, NodeDataRequest::Storage(account_hash.clone()));
+							self.node_data_queries.insert(account.storage_root);
+						}
+						if account.code_hash != KECCAK_EMPTY && !acct_db.contains(&account.code_hash) {
+							code_hash_queries.insert(account.code_hash);
+
+							self.node_data_requests.insert(account.code_hash, NodeDataRequest::Code(account_hash.clone()));
+							self.node_data_queries.insert(account.code_hash);
 						}
 					}
-					if let Some(branch_data) = data_opt {
-						warn!("Node Branch Data: r={:?} ; d={:#?}", request, branch_data);
-					}
-				},
-			}
-		}
+				}
 
-		if accounts_to_insert.len() > 0 {
-			// trace!(target: "sync", "New/Modified accounts detected!\n{:#?}", accounts_to_insert);
+				// if storage_root_queries.len() > 0 {
+				// 	trace!(target: "sync", "Storage root queries: {:?}", storage_root_queries);
+				// }
+				// if code_hash_queries.len() > 0 {
+				// 	trace!(target: "sync", "Code hash queries: {:?}", code_hash_queries);
+				// }
 
-			let mut storage_root_queries = HashSet::new();
-			let mut code_hash_queries = HashSet::new();
+				{
+					// let mut state_root = self.target.clone();
+					// let mut account_trie = if state_root != KECCAK_NULL_RLP {
+					// 	TrieDBMut::from_existing(db.as_hashdb_mut(), &mut state_root).unwrap()
+					// } else {
+					// 	TrieDBMut::new(db.as_hashdb_mut(), &mut state_root)
+					// };
 
-			{
-				let db = db.as_hashdb_mut();
-				for (account_hash, account) in accounts_to_insert.iter() {
-					let acct_db = AccountDBMut::from_hash(db, *account_hash);
+					for (hash, account) in accounts_to_insert.iter() {
+						let thin_rlp = ::rlp::encode(account);
+						// account_trie.insert(&hash, &thin_rlp).unwrap();
 
-					if account.storage_root != KECCAK_NULL_RLP && !acct_db.contains(&account.storage_root) {
-						storage_root_queries.insert(account.storage_root);
-
-						self.node_data_requests.insert(account.storage_root, NodeDataRequest::Storage(account_hash.clone()));
-						self.node_data_queries.insert(account.storage_root);
-					}
-					if account.code_hash != KECCAK_EMPTY && !acct_db.contains(&account.code_hash) {
-						code_hash_queries.insert(account.code_hash);
-
-						self.node_data_requests.insert(account.code_hash, NodeDataRequest::Code(account_hash.clone()));
-						self.node_data_queries.insert(account.code_hash);
+						if &thin_rlp[..] != &empty_rlp[..] {
+							self.bloom.set(&*hash);
+						}
 					}
 				}
+
+				// trace!(target: "sync", "New state root: {:#?}", *state_root);
 			}
 
-			// if storage_root_queries.len() > 0 {
-			// 	trace!(target: "sync", "Storage root queries: {:?}", storage_root_queries);
-			// }
-			// if code_hash_queries.len() > 0 {
-			// 	trace!(target: "sync", "Code hash queries: {:?}", code_hash_queries);
-			// }
-
-			{
-				// let mut state_root = self.target.clone();
-				// let mut account_trie = if state_root != KECCAK_NULL_RLP {
-				// 	TrieDBMut::from_existing(db.as_hashdb_mut(), &mut state_root).unwrap()
-				// } else {
-				// 	TrieDBMut::new(db.as_hashdb_mut(), &mut state_root)
-				// };
-
-				for (hash, account) in accounts_to_insert.iter() {
-					let thin_rlp = ::rlp::encode(account);
-					// account_trie.insert(&hash, &thin_rlp).unwrap();
-
-					if &thin_rlp[..] != &empty_rlp[..] {
-						state_db.note_non_null_account_hash(&hash);
-					}
-				}
-			}
-
-			// trace!(target: "sync", "New state root: {:#?}", *state_root);
+			FastWarp::commit(&mut self.db, &mut self.bloom);
 		}
-
-		FastWarp::commit(state_db);
 
 		if self.node_data_queries.len() == 0 {
-			let success = db.as_hashdb_mut().contains(&self.target);
+			let success = self.db.as_hashdb_mut().contains(&self.target);
 
 			if success {
 				info!(target: "sync", "Successfully finished Node Data requests");
-				self.prune(state_db, state_root);
-				write_state_at(db, self.target, "eth-fw-state");
+				self.prune(state_root);
+				write_state_at(&mut self.db, self.target, "eth-fw-state");
 				return Ok(FastWarpAction::NextStep);
 			} else {
 				error!(target: "fast-warp", "Errored while fast-warping: could not find target in TrieDB");
@@ -643,8 +657,7 @@ impl TrieDownloader {
 	}
 
 	/// Prune the DB removing all the old state data from the FastWarpSync state
-	fn prune (&self, state_db: &mut StateDB, state_root: &H256) {
-		let mut db = state_db.journal_db().boxed_clone();
+	fn prune (&mut self, state_root: &H256) {
 		let mut to_delete: Vec<H256> = Vec::new();
 		let mut count = 0;
 
@@ -655,7 +668,7 @@ impl TrieDownloader {
 		while let Some(state_key) = to_delete.pop() {
 			count += 1;
 
-			if let Some(state_data) = db.as_hashdb().get(&state_key) {
+			if let Some(state_data) = self.db.as_hashdb().get(&state_key) {
 				let node = RlpCodec::decode(&state_data).expect("Invalid RlpCodec");
 
 				// trace!(target: "fast-warp", "Node: {:?}", node);
@@ -693,10 +706,10 @@ impl TrieDownloader {
 				trace!(target: "fast-warp", "DB doesn't contain key {:#?}", state_key);
 			}
 
-			db.as_hashdb_mut().remove(&state_key);
+			self.db.as_hashdb_mut().remove(&state_key);
 		}
 
-		FastWarp::commit(state_db);
+		FastWarp::commit(&mut self.db, &mut self.bloom);
 		info!(target: "fast-warp", "Done pruning. Deleted {} keys", count);
 	}
 }
@@ -738,7 +751,7 @@ impl FastWarp {
 
 	/// Process incoming packet
 	pub fn process(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
-		let mut state_db = io.chain().state_db();
+		let state_db = io.chain().state_db();
 		let mut db = state_db.journal_db().boxed_clone();
 
 		let next_state = match self.state {
@@ -747,21 +760,22 @@ impl FastWarp {
 				None
 			},
 			FastWarpState::StateSync(ref mut state_dl) => {
-				let action = state_dl.process(r, &mut state_db, &mut self.state_root);
+				let action = state_dl.process(r, &mut self.state_root);
 
 				match action {
 					FastWarpAction::NextStep => {
+						let db = io.chain().journal_db();
 						let target_block_header = io.chain().best_block_header();
 						let target_state_root: H256 = target_block_header.state_root().clone();
 						info!(target: "fast-warp", "Starting trie-sync at block {}", target_block_header.number());
-						Some(FastWarpState::TrieSync(TrieDownloader::new(target_state_root)))
+						Some(FastWarpState::TrieSync(TrieDownloader::new(db, target_state_root)))
 					},
 					FastWarpAction::Continue => None,
 					FastWarpAction::Error => Some(FastWarpState::Error),
 				}
 			},
 			FastWarpState::TrieSync(ref mut trie_dl) => {
-				let action = trie_dl.process(peer_id, r, &mut state_db, &mut self.state_root)?;
+				let action = trie_dl.process(peer_id, r, &mut self.state_root)?;
 
 				match action {
 					FastWarpAction::NextStep => {
@@ -868,7 +882,8 @@ impl FastWarp {
 				);
 				if bn_delta <= BLOCKS_DELTA_START_SYNC {
 					info!(target: "fast-warp", "Less than {} blocks from tip. Syncing state.", BLOCKS_DELTA_START_SYNC);
-					self.state = FastWarpState::StateSync(StateDownloader::new());
+					let db = io.chain().journal_db();
+					self.state = FastWarpState::StateSync(StateDownloader::new(db));
 					self.request(io, peer_id, highest_block)
 				} else {
 					let block_dl = match self.state {
@@ -897,14 +912,21 @@ impl FastWarp {
 	}
 
 	/// Commit changes to disk
-	pub fn commit(state_db: &mut StateDB) {
-		let mut db = state_db.journal_db().boxed_clone();
+	pub fn commit(db: &mut Box<JournalDB>, bloom: &mut Bloom) {
+		// let mut db = state_db.journal_db().boxed_clone();
+		// let backing = db.backing().clone();
+		// let mut batch = backing.transaction();
+		// // state_db.journal_bloom(&mut batch);
+		// db.inject(&mut batch).expect("Could not call db.inject");
+		// backing.write_buffered(batch);
+		// db.flush();
+
 		let backing = db.backing().clone();
+		let bloom_journal = bloom.drain_journal();
 		let mut batch = backing.transaction();
-		state_db.journal_bloom(&mut batch);
-		db.inject(&mut batch).expect("Could not call db.inject");
+		StateDB::commit_bloom(&mut batch, bloom_journal);
+		db.inject(&mut batch).expect("Couldn't inject batch in DB");
 		backing.write_buffered(batch);
-		db.flush();
 	}
 
 	/// Finalize the restoration
