@@ -905,6 +905,8 @@ impl BlockChainClient for TestBlockChainClient {
 	}
 
 	fn set_total_difficulty(&self, _block_number: BlockNumber, _total_difficulty: U256) {}
+
+	fn reload_db(&self) {}
 }
 
 impl IoClient for TestBlockChainClient {

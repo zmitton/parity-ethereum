@@ -394,6 +394,9 @@ pub trait BlockChainClient : Sync + Send + AccountData + BlockChain + CallContra
 
 	/// Set the total difficulty for a given block number
 	fn set_total_difficulty(&self, block_number: BlockNumber, total_difficulty: U256);
+
+	/// Reloads the client's database
+	fn reload_db(&self);
 }
 
 /// Provides `reopen_block` method

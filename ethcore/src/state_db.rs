@@ -182,11 +182,12 @@ impl StateDB {
 		bloom
 	}
 
-	/// Reload the blooms from DB
-	pub fn reload_blooms(&mut self) {
-		let bloom = Self::load_bloom(&**self.db.backing());
-		self.account_bloom = Arc::new(Mutex::new(bloom));
-	}
+	// /// Reload the blooms from DB
+	// pub fn reload_blooms(&mut self) {
+	// 	let bloom = Self::load_bloom(&**self.db.backing());
+	// 	self.account_bloom = Arc::new(Mutex::new(bloom));
+	// 	trace!(target: "account_bloom", "Bloom reloaded. {:?} full", self.account_bloom.lock().saturation());
+	// }
 
 	/// Commit blooms journal to the database transaction
 	pub fn commit_bloom(batch: &mut DBTransaction, journal: BloomJournal) {
@@ -344,7 +345,7 @@ impl StateDB {
 
 	/// Clone the database for a canonical state.
 	pub fn boxed_clone_canon(&self, parent: &H256) -> StateDB {
-		StateDB {
+		let state_db = StateDB {
 			db: self.db.boxed_clone(),
 			account_cache: self.account_cache.clone(),
 			code_cache: self.code_cache.clone(),
@@ -354,7 +355,10 @@ impl StateDB {
 			parent_hash: Some(parent.clone()),
 			commit_hash: None,
 			commit_number: None,
-		}
+		};
+
+		trace!(target: "account_bloom", "StateDB cloned-canon. Bloom {:?} full", state_db.account_bloom.lock().saturation());
+		state_db
 	}
 
 	/// Check if pruning is enabled on the database.

@@ -778,6 +778,8 @@ impl Client {
 			trace!(target: "client", "Found registrar at {}", addr);
 		}
 
+		warn!(target: "client", "Creating a new CLIENT!");
+
 		let client = Arc::new(Client {
 			enabled: AtomicBool::new(true),
 			sleep_state: Mutex::new(SleepState::new(awake)),
@@ -2307,6 +2309,21 @@ impl BlockChainClient for Client {
 
 	fn set_total_difficulty(&self, block_number: BlockNumber, total_difficulty: U256) {
 		self.total_difficulties.lock().insert(block_number, total_difficulty);
+	}
+
+	fn reload_db(&self) {
+		trace!(target: "client", "Reloading client database");
+
+		let _import_lock = self.importer.import_lock.lock();
+		let mut state_db = self.state_db.write();
+		let mut chain = self.chain.write();
+		let mut tracedb = self.tracedb.write();
+		let db = self.db.read();
+
+		let cache_size = state_db.cache_size();
+		*state_db = StateDB::new(journaldb::new(db.key_value().clone(), self.pruning, ::db::COL_STATE), cache_size);
+		*chain = Arc::new(BlockChain::new(self.config.blockchain.clone(), &[], db.clone()));
+		*tracedb = TraceDB::new(self.config.tracing.clone(), db.clone(), chain.clone());
 	}
 }
 
