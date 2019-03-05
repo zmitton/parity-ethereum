@@ -43,8 +43,8 @@ use verification::queue::kind::blocks::Unverified;
 
 #[test]
 fn imports_from_empty() {
-	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
-	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let state_db = test_helpers::new_state_db_backend(::db::NUM_STATE_DB_COLUMNS);
+	let blockchain_db = test_helpers::new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 
 	let spec = Spec::new_test();
 
@@ -62,8 +62,8 @@ fn imports_from_empty() {
 
 #[test]
 fn should_return_registrar() {
-	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
-	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let state_db = test_helpers::new_state_db_backend(::db::NUM_STATE_DB_COLUMNS);
+	let blockchain_db = test_helpers::new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 
 	let tempdir = TempDir::new("").unwrap();
 	let spec = ethereum::new_morden(&tempdir.path().to_owned());
@@ -94,8 +94,8 @@ fn returns_state_root_basic() {
 
 #[test]
 fn imports_good_block() {
-	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
-	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let state_db = test_helpers::new_state_db_backend(::db::NUM_STATE_DB_COLUMNS);
+	let blockchain_db = test_helpers::new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 
 	let spec = Spec::new_test();
 
@@ -120,8 +120,8 @@ fn imports_good_block() {
 
 #[test]
 fn query_none_block() {
-	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
-	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let state_db = test_helpers::new_state_db_backend(::db::NUM_STATE_DB_COLUMNS);
+	let blockchain_db = test_helpers::new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 
 	let spec = Spec::new_test();
 
@@ -271,8 +271,8 @@ fn can_mine() {
 
 #[test]
 fn change_history_size() {
-	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
-	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let state_db = test_helpers::new_state_db_backend(::db::NUM_STATE_DB_COLUMNS);
+	let blockchain_db = test_helpers::new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 
 	let test_spec = Spec::new_null();
 	let mut config = ClientConfig::default();

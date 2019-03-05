@@ -27,7 +27,7 @@ use std::cmp;
 use super::{ManifestData, StateRebuilder, Rebuilder, RestorationStatus, SnapshotService, MAX_CHUNK_SIZE};
 use super::io::{SnapshotReader, LooseReader, SnapshotWriter, LooseWriter};
 
-use blockchain::{BlockChain, BlockChainDB, BlockChainDBHandler};
+use blockchain::{BlockChain, BlockChainDB, BlockChainDBHandler, StateDBBackend, StateDBHandler};
 use client::{BlockInfo, BlockChainClient, Client, ChainInfo, ClientIoMessage};
 use engines::EthEngine;
 use error::{Error, ErrorKind as SnapshotErrorKind};
@@ -67,7 +67,7 @@ impl Drop for Guard {
 /// External database restoration handler
 pub trait DatabaseRestore: Send + Sync {
 	/// Restart with a new backend. Takes ownership of passed database and moves it to a new location.
-	fn restore_db(&self, new_state_db: &str, new_blockchain_db: &str, new_trace_db: &str) -> Result<(), Error>;
+	fn restore_db(&self, new_state_db: &str, new_blockchain_db: &str) -> Result<(), Error>;
 }
 
 /// State restoration manager.
@@ -80,17 +80,21 @@ struct Restoration {
 	writer: Option<LooseWriter>,
 	snappy_buffer: Bytes,
 	final_state_root: H256,
-	guard: Guard,
-	db: Arc<BlockChainDB>,
+	blockchain_guard: Guard,
+	state_guard: Guard,
+	blockchain_db: Arc<BlockChainDB>,
+	state_db: Arc<StateDBBackend>,
 }
 
 struct RestorationParams<'a> {
 	manifest: ManifestData, // manifest to base restoration on.
 	pruning: Algorithm, // pruning algorithm for the database.
-	db: Arc<BlockChainDB>, // database
+	blockchain_db: Arc<BlockChainDB>, // database
+	state_db: Arc<StateDBBackend>, // database
 	writer: Option<LooseWriter>, // writer for recovered snapshot.
 	genesis: &'a [u8], // genesis block of the chain.
-	guard: Guard, // guard for the restoration directory.
+	blockchain_guard: Guard, // guard for the restoration directory.
+	state_guard: Guard, // guard for the restoration directory.
 	engine: &'a EthEngine,
 }
 
@@ -102,13 +106,14 @@ impl Restoration {
 		let state_chunks = manifest.state_hashes.iter().cloned().collect();
 		let block_chunks = manifest.block_hashes.iter().cloned().collect();
 
-		let raw_db = params.db;
+		let raw_blockchain_db = params.blockchain_db;
+		let raw_state_db = params.state_db;
 
-		let chain = BlockChain::new(Default::default(), params.genesis, raw_db.clone());
+		let chain = BlockChain::new(Default::default(), params.genesis, raw_blockchain_db.clone());
 		let components = params.engine.snapshot_components()
 			.ok_or_else(|| ::snapshot::Error::SnapshotsUnsupported)?;
 
-		let secondary = components.rebuilder(chain, raw_db.clone(), &manifest)?;
+		let secondary = components.rebuilder(chain, raw_blockchain_db.clone(), &manifest)?;
 
 		let root = manifest.state_root.clone();
 
@@ -116,13 +121,15 @@ impl Restoration {
 			manifest: manifest,
 			state_chunks_left: state_chunks,
 			block_chunks_left: block_chunks,
-			state: StateRebuilder::new(raw_db.key_value().clone(), params.pruning),
+			state: StateRebuilder::new(raw_state_db.key_value().clone(), params.pruning),
 			secondary: secondary,
 			writer: params.writer,
 			snappy_buffer: Vec::new(),
 			final_state_root: root,
-			guard: params.guard,
-			db: raw_db,
+			blockchain_guard: params.blockchain_guard,
+			state_guard: params.state_guard,
+			blockchain_db: raw_blockchain_db,
+			state_db: raw_state_db,
 		})
 	}
 
@@ -192,7 +199,8 @@ impl Restoration {
 			writer.finish(self.manifest)?;
 		}
 
-		self.guard.disarm();
+		self.blockchain_guard.disarm();
+		self.state_guard.disarm();
 		Ok(())
 	}
 
@@ -216,8 +224,10 @@ pub struct ServiceParams {
 	pub genesis_block: Bytes,
 	/// State pruning algorithm.
 	pub pruning: Algorithm,
-	/// Handler for opening a restoration DB.
-	pub restoration_db_handler: Box<BlockChainDBHandler>,
+	/// Handler for opening a blockchain restoration DB.
+	pub blockchain_restoration_db_handler: Box<BlockChainDBHandler>,
+	/// Handler for opening a state restoration DB.
+	pub state_restoration_db_handler: Box<StateDBHandler>,
 	/// Async IO channel for sending messages.
 	pub channel: Channel,
 	/// The directory to put snapshots in.
@@ -231,7 +241,8 @@ pub struct ServiceParams {
 /// This controls taking snapshots and restoring from them.
 pub struct Service {
 	restoration: Mutex<Option<Restoration>>,
-	restoration_db_handler: Box<BlockChainDBHandler>,
+	state_restoration_db_handler: Box<StateDBHandler>,
+	blockchain_restoration_db_handler: Box<BlockChainDBHandler>,
 	snapshot_root: PathBuf,
 	io_channel: Mutex<Channel>,
 	pruning: Algorithm,
@@ -252,7 +263,8 @@ impl Service {
 	pub fn new(params: ServiceParams) -> Result<Self, Error> {
 		let mut service = Service {
 			restoration: Mutex::new(None),
-			restoration_db_handler: params.restoration_db_handler,
+			state_restoration_db_handler: params.state_restoration_db_handler,
+			blockchain_restoration_db_handler: params.blockchain_restoration_db_handler,
 			snapshot_root: params.snapshot_root,
 			io_channel: Mutex::new(params.channel),
 			pruning: params.pruning,
@@ -276,7 +288,7 @@ impl Service {
 		}
 
 		// delete the temporary restoration DB dir if it does exist.
-		if let Err(e) = fs::remove_dir_all(service.restoration_db()) {
+		if let Err(e) = fs::remove_dir_all(service.blockchain_restoration_db()).and(fs::remove_dir_all(service.state_restoration_db())) {
 			if e.kind() != ErrorKind::NotFound {
 				return Err(e.into())
 			}
@@ -316,10 +328,17 @@ impl Service {
 		dir
 	}
 
-	// restoration db path.
-	fn restoration_db(&self) -> PathBuf {
+	// blockchain restoration db path.
+	fn blockchain_restoration_db(&self) -> PathBuf {
 		let mut dir = self.restoration_dir();
-		dir.push("db");
+		dir.push("blockchain_db");
+		dir
+	}
+
+	// state restoration db path.
+	fn state_restoration_db(&self) -> PathBuf {
+		let mut dir = self.restoration_dir();
+		dir.push("state_db");
 		dir
 	}
 
@@ -342,8 +361,10 @@ impl Service {
 		let migrated_blocks = self.migrate_blocks()?;
 		info!(target: "snapshot", "Migrated {} ancient blocks", migrated_blocks);
 
-		let rest_db = self.restoration_db();
-		self.client.restore_db(&*rest_db.to_string_lossy(), &*rest_db.join("a").to_string_lossy(), &*rest_db.join("b").to_string_lossy())?;
+		let blockchain_rest_db = self.blockchain_restoration_db();
+		let state_rest_db = self.state_restoration_db();
+
+		self.client.restore_db(&*blockchain_rest_db.to_string_lossy(), &*state_rest_db.to_string_lossy())?;
 		Ok(())
 	}
 
@@ -351,12 +372,13 @@ impl Service {
 	fn migrate_blocks(&self) -> Result<usize, Error> {
 		// Count the number of migrated blocks
 		let mut count = 0;
-		let rest_db = self.restoration_db();
+		let blockchain_rest_db = self.blockchain_restoration_db();
+		let state_rest_db = self.state_restoration_db();
 
 		let cur_chain_info = self.client.chain_info();
 
-		let next_db = self.restoration_db_handler.open(&rest_db)?;
-		let next_chain = BlockChain::new(Default::default(), &[], next_db.clone());
+		let next_blockchain_db = self.blockchain_restoration_db_handler.open(&blockchain_rest_db)?;
+		let next_chain = BlockChain::new(Default::default(), &[], next_blockchain_db.clone());
 		let next_chain_info = next_chain.chain_info();
 
 		// The old database looks like this:
@@ -417,9 +439,9 @@ impl Service {
 
 			// Writting changes to DB and logging every now and then
 			if block_number % 1_000 == 0 {
-				next_db.key_value().write_buffered(batch);
+				next_blockchain_db.key_value().write_buffered(batch);
 				next_chain.commit();
-				next_db.key_value().flush().expect("DB flush failed.");
+				next_blockchain_db.key_value().flush().expect("DB flush failed.");
 				batch = DBTransaction::new();
 			}
 
@@ -429,9 +451,9 @@ impl Service {
 		}
 
 		// Final commit to the DB
-		next_db.key_value().write_buffered(batch);
+		next_blockchain_db.key_value().write_buffered(batch);
 		next_chain.commit();
-		next_db.key_value().flush().expect("DB flush failed.");
+		next_blockchain_db.key_value().flush().expect("DB flush failed.");
 
 		// We couldn't reach the targeted hash
 		if parent_hash != target_hash {
@@ -519,7 +541,8 @@ impl Service {
 		let mut res = self.restoration.lock();
 
 		let rest_dir = self.restoration_dir();
-		let rest_db = self.restoration_db();
+		let blockchain_rest_db = self.blockchain_restoration_db();
+		let state_rest_db = self.state_restoration_db();
 		let recovery_temp = self.temp_recovery_dir();
 		let prev_chunks = self.prev_chunks_dir();
 
@@ -566,10 +589,12 @@ impl Service {
 		let params = RestorationParams {
 			manifest: manifest.clone(),
 			pruning: self.pruning,
-			db: self.restoration_db_handler.open(&rest_db)?,
+			blockchain_db: self.blockchain_restoration_db_handler.open(&blockchain_rest_db)?,
+			state_db: self.state_restoration_db_handler.open(&state_rest_db)?,
 			writer: writer,
 			genesis: &self.genesis_block,
-			guard: Guard::new(rest_db),
+			blockchain_guard: Guard::new(blockchain_rest_db),
+			state_guard: Guard::new(state_rest_db),
 			engine: &*self.engine,
 		};
 
@@ -710,14 +735,14 @@ impl Service {
 
 	/// Feed a chunk with the Restoration
 	fn feed_chunk_with_restoration(&self, restoration: &mut Option<Restoration>, hash: H256, chunk: &[u8], is_state: bool) -> Result<(), Error> {
-		let (result, db) = {
+		let (result, blockchain_db, state_db) = {
 			match self.status() {
 				RestorationStatus::Inactive | RestorationStatus::Failed => {
 					trace!(target: "snapshot", "Tried to restore chunk {:x} while inactive or failed", hash);
 					return Ok(());
 				},
 				RestorationStatus::Ongoing { .. } | RestorationStatus::Initializing { .. } => {
-					let (res, db) = {
+					let (res, blockchain_db, state_db) = {
 						let rest = match *restoration {
 							Some(ref mut r) => r,
 							None => return Ok(()),
@@ -726,7 +751,7 @@ impl Service {
 						(match is_state {
 							true => rest.feed_state(hash, chunk, &self.restoring_snapshot),
 							false => rest.feed_blocks(hash, chunk, &*self.engine, &self.restoring_snapshot),
-						}.map(|_| rest.is_done()), rest.db.clone())
+						}.map(|_| rest.is_done()), rest.blockchain_db.clone(), rest.state_db.clone())
 					};
 
 					let res = match res {
@@ -738,8 +763,12 @@ impl Service {
 
 							match is_done {
 								true => {
-									db.key_value().flush()?;
-									drop(db);
+									blockchain_db.key_value().flush()?;
+									drop(blockchain_db);
+
+									state_db.key_value().flush()?;
+									drop(state_db);
+
 									return self.finalize_restoration(&mut *restoration);
 								},
 								false => Ok(())
@@ -747,13 +776,15 @@ impl Service {
 						}
 						other => other.map(drop),
 					};
-					(res, db)
+					(res, blockchain_db, state_db)
 				}
 			}
 		};
 
 		result?;
-		db.key_value().flush()?;
+		blockchain_db.key_value().flush()?;
+		state_db.key_value().flush()?;
+
 		Ok(())
 	}
 
@@ -867,7 +898,7 @@ mod tests {
 	use snapshot::{ManifestData, RestorationStatus, SnapshotService};
 	use super::*;
 	use tempdir::TempDir;
-	use test_helpers::{generate_dummy_client_with_spec_and_data, restoration_db_handler};
+	use test_helpers::{generate_dummy_client_with_spec_and_data, blockchain_restoration_db_handler, state_restoration_db_handler};
 
 	#[test]
 	fn sends_async_messages() {
@@ -882,7 +913,8 @@ mod tests {
 		let snapshot_params = ServiceParams {
 			engine: spec.engine.clone(),
 			genesis_block: spec.genesis_block(),
-			restoration_db_handler: restoration_db_handler(Default::default()),
+			blockchain_restoration_db_handler: blockchain_restoration_db_handler(Default::default()),
+			state_restoration_db_handler: state_restoration_db_handler(Default::default()),
 			pruning: Algorithm::Archive,
 			channel: service.channel(),
 			snapshot_root: dir,
@@ -920,7 +952,8 @@ mod tests {
 
 		let state_hashes: Vec<_> = (0..5).map(|_| H256::random()).collect();
 		let block_hashes: Vec<_> = (0..5).map(|_| H256::random()).collect();
-		let db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+		let blockchain_db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+		let state_db_config = DatabaseConfig::with_columns(::db::NUM_STATE_DB_COLUMNS);
 		let gb = spec.genesis_block();
 		let flag = ::std::sync::atomic::AtomicBool::new(true);
 
@@ -934,10 +967,12 @@ mod tests {
 				block_hash: H256::default(),
 			},
 			pruning: Algorithm::Archive,
-			db: restoration_db_handler(db_config).open(&tempdir.path().to_owned()).unwrap(),
+			blockchain_db: blockchain_restoration_db_handler(blockchain_db_config).open(&tempdir.path().join("blockchain_db").to_owned()).unwrap(),
+			state_db: state_restoration_db_handler(state_db_config).open(&tempdir.path().join("state_db").to_owned()).unwrap(),
 			writer: None,
 			genesis: &gb,
-			guard: Guard::benign(),
+			blockchain_guard: Guard::benign(),
+			state_guard: Guard::benign(),
 			engine: &*spec.engine.clone(),
 		};
 

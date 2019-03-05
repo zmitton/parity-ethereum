@@ -224,7 +224,7 @@ fn fixed_to_contract_only() {
 	assert_eq!(client.chain_info().best_block_number, 11);
 	let (reader, _tempdir) = snapshot_helpers::snap(&*client);
 
-	let new_db = test_helpers::new_db(db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let new_db = test_helpers::new_blockchain_db(db::NUM_BLOCKCHAIN_DB_COLUMNS);
 	let spec = spec_fixed_to_contract();
 
 	// ensure fresh engine's step matches.
@@ -256,7 +256,7 @@ fn fixed_to_contract_to_contract() {
 
 	assert_eq!(client.chain_info().best_block_number, 16);
 	let (reader, _tempdir) = snapshot_helpers::snap(&*client);
-	let new_db = test_helpers::new_db(db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let new_db = test_helpers::new_blockchain_db(db::NUM_BLOCKCHAIN_DB_COLUMNS);
 	let spec = spec_fixed_to_contract();
 
 	for _ in 0..16 { spec.engine.step() }

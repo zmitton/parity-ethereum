@@ -81,12 +81,35 @@ pub trait BlockChainDB: Send + Sync {
 	}
 }
 
+
 /// Generic database handler. This trait contains one function `open`. When called, it opens database with a
 /// predefined config.
 pub trait BlockChainDBHandler: Send + Sync {
 	/// Open the predefined key-value database.
 	fn open(&self, path: &Path) -> io::Result<Arc<BlockChainDB>>;
 }
+
+/// Database backing `State`.
+pub trait StateDBBackend: Send + Sync {
+	/// Generic key value store.
+	fn key_value(&self) -> &Arc<KeyValueDB>;
+
+	/// Restore the DB from the given path
+	fn restore(&self, new_db: &str) -> Result<(), io::Error> {
+		// Restore the key_value DB
+		self.key_value().restore(new_db)?;
+
+		Ok(())
+	}
+}
+
+/// Generic database handler. This trait contains one function `open`. When called, it opens database with a
+/// predefined config.
+pub trait StateDBHandler: Send + Sync {
+	/// Open the predefined key-value database.
+	fn open(&self, path: &Path) -> io::Result<Arc<StateDBBackend>>;
+}
+
 
 /// Interface for querying blocks by hash and by number.
 pub trait BlockProvider {

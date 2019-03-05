@@ -38,8 +38,8 @@ use types::views::BlockView;
 
 #[test]
 fn can_trace_block_and_uncle_reward() {
-	let state_db = test_helpers::new_db(::db::NUM_STATE_DB_COLUMNS);
-	let blockchain_db = test_helpers::new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let state_db = test_helpers::new_state_db_backend(::db::NUM_STATE_DB_COLUMNS);
+	let blockchain_db = test_helpers::new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 
 	let spec = Spec::new_test_with_reward();
 	let engine = &*spec.engine;

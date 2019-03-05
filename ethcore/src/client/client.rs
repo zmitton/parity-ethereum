@@ -21,7 +21,7 @@ use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering as AtomicOrdering};
 use std::sync::{Arc, Weak};
 use std::time::{Instant, Duration};
 
-use blockchain::{BlockReceipts, BlockChain, BlockChainDB, BlockProvider, TreeRoute, ImportRoute, TransactionAddress, ExtrasInsert, BlockNumberKey};
+use blockchain::{BlockReceipts, BlockChain, BlockChainDB, BlockProvider, TreeRoute, ImportRoute, TransactionAddress, ExtrasInsert, BlockNumberKey, StateDBBackend};
 use bytes::Bytes;
 use call_contract::{CallContract, RegistryInfo};
 use ethcore_miner::pool::VerifiedTransaction;
@@ -197,7 +197,7 @@ pub struct Client {
 	pruning: journaldb::Algorithm,
 
 	/// Client uses this to store blocks, traces, etc.
-    state_db_backing: RwLock<Arc<BlockChainDB>>,
+    state_db_backing: RwLock<Arc<StateDBBackend>>,
     blockchain_db_backing: RwLock<Arc<BlockChainDB>>,
 
 	state_db: RwLock<StateDB>,
@@ -715,7 +715,7 @@ impl Client {
 	pub fn new(
 		config: ClientConfig,
 		spec: &Spec,
-	    state_db_backing: Arc<BlockChainDB>,
+	    state_db_backing: Arc<StateDBBackend>,
         blockchain_db_backing: Arc<BlockChainDB>,
 		miner: Arc<Miner>,
 		message_channel: IoChannel<ClientIoMessage>,
@@ -1321,8 +1321,8 @@ impl Client {
 
 impl snapshot::DatabaseRestore for Client {
 	/// Restart the client with a new backend
-	fn restore_db(&self, new_state_db: &str, new_blockchain_db: &str, new_trace_db: &str) -> Result<(), EthcoreError> {
-	    trace!(target: "snapshot", "Replacing client databases with {:?} {:?} {:?}", new_state_db, new_blockchain_db, new_trace_db);
+	fn restore_db(&self, new_state_db: &str, new_blockchain_db: &str) -> Result<(), EthcoreError> {
+	    trace!(target: "snapshot", "Replacing client databases with {:?} {:?}", new_state_db, new_blockchain_db);
 
 		let _import_lock = self.importer.import_lock.lock();
 		let mut state_db = self.state_db.write();

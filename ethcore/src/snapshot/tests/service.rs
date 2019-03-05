@@ -27,7 +27,7 @@ use snapshot::io::{PackedReader, PackedWriter, SnapshotReader, SnapshotWriter};
 use snapshot::service::{Service, ServiceParams};
 use snapshot::{chunk_state, chunk_secondary, ManifestData, Progress, SnapshotService, RestorationStatus};
 use spec::Spec;
-use test_helpers::{new_db, new_temp_db, generate_dummy_client_with_spec_and_data, restoration_db_handler};
+use test_helpers::{new_blockchain_db, new_state_db_backend, new_temp_blockchain_db, new_temp_state_db, generate_dummy_client_with_spec_and_data, blockchain_restoration_db_handler, state_restoration_db_handler};
 
 use parking_lot::Mutex;
 use io::IoChannel;
@@ -45,21 +45,25 @@ fn restored_is_equivalent() {
 	let client = generate_dummy_client_with_spec_and_data(Spec::new_null, NUM_BLOCKS, TX_PER, &gas_prices);
 
 	let tempdir = TempDir::new("").unwrap();
-	let client_db = tempdir.path().join("client_db");
+	//let client_db = tempdir.path().join("client_db");
+	let state_db_path = tempdir.path().join("state_db");
+	let blockchain_db_path = tempdir.path().join("blockchain_db");
 	let path = tempdir.path().join("snapshot");
 
-	let db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-	let restoration = restoration_db_handler(db_config);
-	let blockchain_db = restoration.open(&client_db).unwrap();
+	let state_db_config = DatabaseConfig::with_columns(::db::NUM_STATE_DB_COLUMNS);
+	let state_restoration = state_restoration_db_handler(state_db_config);
+	let state_db = state_restoration.open(&state_db_path).unwrap();
 
-	let a_db = new_temp_db(&path.join("a"), ::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let blockchain_db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let blockchain_restoration = blockchain_restoration_db_handler(blockchain_db_config);
+	let blockchain_db = blockchain_restoration.open(&blockchain_db_path).unwrap();
 
 	let spec = Spec::new_null();
 	let client2 = Client::new(
 		Default::default(),
 		&spec,
+		state_db,
 		blockchain_db,
-		a_db,
 		Arc::new(::miner::Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -67,7 +71,8 @@ fn restored_is_equivalent() {
 	let service_params = ServiceParams {
 		engine: spec.engine.clone(),
 		genesis_block: spec.genesis_block(),
-		restoration_db_handler: restoration,
+		blockchain_restoration_db_handler: blockchain_restoration,
+		state_restoration_db_handler: state_restoration,
 		pruning: ::journaldb::Algorithm::Archive,
 		channel: IoChannel::disconnected(),
 		snapshot_root: path,
@@ -116,7 +121,8 @@ fn guards_delete_folders() {
 	let service_params = ServiceParams {
 		engine: spec.engine.clone(),
 		genesis_block: spec.genesis_block(),
-		restoration_db_handler: restoration_db_handler(DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS)),
+		blockchain_restoration_db_handler: blockchain_restoration_db_handler(DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS)),
+		state_restoration_db_handler: state_restoration_db_handler(DatabaseConfig::with_columns(::db::NUM_STATE_DB_COLUMNS)),
 		pruning: ::journaldb::Algorithm::Archive,
 		channel: IoChannel::disconnected(),
 		snapshot_root: tempdir.path().to_owned(),
@@ -137,7 +143,7 @@ fn guards_delete_folders() {
 
 	service.init_restore(manifest.clone(), true).unwrap();
 	assert!(path.exists());
-
+	assert!(path.join("temp").exists());
 	// The `db` folder should have been deleted,
 	// while the `temp` one kept
 	service.abort_restore();
@@ -206,13 +212,16 @@ fn keep_ancient_blocks() {
 	writer.into_inner().finish(manifest.clone()).unwrap();
 
 	// Initialize the Client
-	let db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-	let client_db = new_temp_db(&tempdir.path(), ::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let blockchain_db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let state_db_config = DatabaseConfig::with_columns(::db::NUM_STATE_DB_COLUMNS);
+	let client_blockchain_db = new_temp_blockchain_db(&tempdir.path(), ::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let client_state_db = new_temp_state_db(&tempdir.path(), ::db::NUM_STATE_DB_COLUMNS);
+
 	let client2 = Client::new(
 		ClientConfig::default(),
 		&spec,
-		client_db.clone(),
-		client_db.clone(),
+		client_state_db,
+		client_blockchain_db,
 		Arc::new(::miner::Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
@@ -232,7 +241,8 @@ fn keep_ancient_blocks() {
 	let service_params = ServiceParams {
 		engine: spec.engine.clone(),
 		genesis_block: spec.genesis_block(),
-		restoration_db_handler: restoration_db_handler(db_config),
+		blockchain_restoration_db_handler: blockchain_restoration_db_handler(blockchain_db_config),
+		state_restoration_db_handler: state_restoration_db_handler(state_db_config),
 		pruning: ::journaldb::Algorithm::Archive,
 		channel: IoChannel::disconnected(),
 		snapshot_root: tempdir.path().to_owned(),
@@ -282,20 +292,24 @@ fn recover_aborted_recovery() {
 
 	let spec = Spec::new_null();
 	let tempdir = TempDir::new("").unwrap();
-	let db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-	let client_db = new_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let blockchain_db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let state_db_config = DatabaseConfig::with_columns(::db::NUM_STATE_DB_COLUMNS);
+	let client_blockchain_db = new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+	let client_state_db = new_state_db_backend(::db::NUM_STATE_DB_COLUMNS);
+
 	let client2 = Client::new(
 		Default::default(),
 		&spec,
-		client_db.clone(),
-		client_db.clone(),
+		client_state_db,
+		client_blockchain_db,
 		Arc::new(::miner::Miner::new_for_tests(&spec, None)),
 		IoChannel::disconnected(),
 	).unwrap();
 	let service_params = ServiceParams {
 		engine: spec.engine.clone(),
 		genesis_block: spec.genesis_block(),
-		restoration_db_handler: restoration_db_handler(db_config),
+		blockchain_restoration_db_handler: blockchain_restoration_db_handler(blockchain_db_config),
+		state_restoration_db_handler: state_restoration_db_handler(state_db_config),
 		pruning: ::journaldb::Algorithm::Archive,
 		channel: IoChannel::disconnected(),
 		snapshot_root: tempdir.path().to_owned(),
