@@ -364,7 +364,7 @@ impl Service {
 		let blockchain_rest_db = self.blockchain_restoration_db();
 		let state_rest_db = self.state_restoration_db();
 
-		self.client.restore_db(&*blockchain_rest_db.to_string_lossy(), &*state_rest_db.to_string_lossy())?;
+		self.client.restore_db(&*state_rest_db.to_string_lossy(), &*blockchain_rest_db.to_string_lossy())?;
 		Ok(())
 	}
 

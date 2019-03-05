@@ -341,7 +341,7 @@ mod tests {
 	use trace::trace::{Call, Action, Res};
 	use trace::flat::{FlatTrace, FlatBlockTraces, FlatTransactionTraces};
 	use evm::CallType;
-	use test_helpers::{new_blockchain_db, new_state_db_backend};
+	use test_helpers::new_blockchain_db;
 
 	struct NoopExtras;
 
