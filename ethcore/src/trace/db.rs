@@ -387,7 +387,7 @@ mod tests {
 
 	#[test]
 	fn test_reopening_db_with_tracing_off() {
-		let db = new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+		let db = new_blockchain_db();
 		let mut config = Config::default();
 
 		// set autotracing
@@ -401,7 +401,7 @@ mod tests {
 
 	#[test]
 	fn test_reopening_db_with_tracing_on() {
-		let db = new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+		let db = new_blockchain_db();
 		let mut config = Config::default();
 
 		// set tracing on
@@ -479,7 +479,7 @@ mod tests {
 
 	#[test]
 	fn test_import_non_canon_traces() {
-		let db = new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+		let db = new_blockchain_db();
 		let mut config = Config::default();
 		config.enabled = true;
 		let block_0 = H256::from(0xa1);
@@ -506,7 +506,7 @@ mod tests {
 
 	#[test]
 	fn test_import() {
-		let db = new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+		let db = new_blockchain_db();
 		let mut config = Config::default();
 		config.enabled = true;
 		let block_1 = H256::from(0xa1);
@@ -585,7 +585,7 @@ mod tests {
 
 	#[test]
 	fn query_trace_after_reopen() {
-		let db = new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+		let db = new_blockchain_db();
 		let mut config = Config::default();
 		let mut extras = Extras::default();
 		let block_0 = H256::from(0xa1);
@@ -618,7 +618,7 @@ mod tests {
 
 	#[test]
 	fn query_genesis() {
-		let db = new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
+		let db = new_blockchain_db();
 		let mut config = Config::default();
 		let mut extras = Extras::default();
 		let block_0 = H256::from(0xa1);

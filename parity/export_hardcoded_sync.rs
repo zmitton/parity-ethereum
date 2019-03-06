@@ -87,9 +87,8 @@ pub fn execute(cmd: ExportHsyncCmd) -> Result<String, String> {
 	config.queue.max_mem_use = cmd.cache_config.queue() as usize * 1024 * 1024;
 
 	// initialize database.
-	let db = db::open_db(&db_dirs.client_blockchain_db_path(algorithm).to_str().expect("DB path could not be converted to string."),
+	let db = db::open_blockchain_db(&db_dirs.client_blockchain_db_path(algorithm).to_str().expect("DB path could not be converted to string."),
 						 &cmd.cache_config,
-						 NUM_BLOCKCHAIN_DB_COLUMNS,
 						 &cmd.compaction).map_err(|e| format!("Failed to open database {:?}", e))?;
 
 	let service = light_client::Service::start(config, &spec, UnavailableDataFetcher, db, cache)

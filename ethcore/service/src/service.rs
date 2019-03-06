@@ -26,7 +26,7 @@ use io::{IoContext, TimerToken, IoHandler, IoService, IoError};
 use stop_guard::StopGuard;
 
 use sync::PrivateTxHandler;
-use blockchain::{BlockChainDB, BlockChainDBHandler};
+use blockchain::{BlockChainDB, BlockChainDBHandler, StateDBHandler, StateDBBackend};
 use ethcore::client::{Client, ClientConfig, ChainNotify, ClientIoMessage};
 use ethcore::miner::Miner;
 use ethcore::snapshot::service::{Service as SnapshotService, ServiceParams as SnapServiceParams};
@@ -81,7 +81,7 @@ pub struct ClientService {
 	client: Arc<Client>,
 	snapshot: Arc<SnapshotService>,
 	private_tx: Arc<PrivateTxService>,
-	state_db_backing: Arc<BlockChainDB>,
+	state_db_backing: Arc<StateDBBackend>,
 	blockchain_db_backing: Arc<BlockChainDB>,
 	_stop_guard: StopGuard,
 }
@@ -91,10 +91,11 @@ impl ClientService {
 	pub fn start(
 		config: ClientConfig,
 		spec: &Spec,
-		state_db_backing: Arc<BlockChainDB>,
+		state_db_backing: Arc<StateDBBackend>,
 		blockchain_db_backing: Arc<BlockChainDB>,
 		snapshot_path: &Path,
-		restoration_db_handler: Box<BlockChainDBHandler>,
+		blockchain_restoration_db_handler: Box<BlockChainDBHandler>,
+		state_restoration_db_handler: Box<StateDBHandler>,
 		_ipc_path: &Path,
 		miner: Arc<Miner>,
 		signer: Arc<Signer>,
@@ -122,7 +123,8 @@ impl ClientService {
 		let snapshot_params = SnapServiceParams {
 			engine: spec.engine.clone(),
 			genesis_block: spec.genesis_block(),
-			restoration_db_handler: restoration_db_handler,
+			blockchain_restoration_db_handler: blockchain_restoration_db_handler,
+			state_restoration_db_handler: state_restoration_db_handler,
 			pruning: pruning,
 			channel: io_service.channel(),
 			snapshot_root: snapshot_path.into(),
@@ -197,7 +199,7 @@ impl ClientService {
 	}
 
 	/// Get a handle to the state database.
-	pub fn state_db_backing(&self) -> Arc<BlockChainDB> { self.state_db_backing.clone() }
+	pub fn state_db_backing(&self) -> Arc<StateDBBackend> { self.state_db_backing.clone() }
 
 	/// Get a handle to the blockchain database.
 	pub fn blockchain_db_backing(&self) -> Arc<BlockChainDB> { self.blockchain_db_backing.clone() }
@@ -287,7 +289,7 @@ mod tests {
 
 	use tempdir::TempDir;
 
-	use ethcore_db::NUM_COLUMNS;
+	use ethcore_db::{NUM_BLOCKCHAIN_DB_COLUMNS, NUM_STATE_DB_COLUMNS};
 	use ethcore::client::ClientConfig;
 	use ethcore::miner::Miner;
 	use ethcore::spec::Spec;
@@ -304,22 +306,30 @@ mod tests {
 		let snapshot_path = tempdir.path().join("snapshot");
 
 		let client_config = ClientConfig::default();
-		let mut client_db_config = DatabaseConfig::with_columns(NUM_COLUMNS);
+		let mut client_blockchain_db_config = DatabaseConfig::with_columns(NUM_BLOCKCHAIN_DB_COLUMNS);
+		let mut client_state_db_config = DatabaseConfig::with_columns(NUM_STATE_DB_COLUMNS);
 
-		client_db_config.memory_budget = client_config.db_cache_size;
-		client_db_config.compaction = CompactionProfile::auto(&client_path);
+		client_blockchain_db_config.memory_budget = client_config.db_cache_size;
+		client_blockchain_db_config.compaction = CompactionProfile::auto(&client_path);
 
-		let client_db_handler = test_helpers::restoration_db_handler(client_db_config.clone());
-		let client_db = client_db_handler.open(&client_path).unwrap();
-		let restoration_db_handler = test_helpers::restoration_db_handler(client_db_config);
+		client_state_db_config.memory_budget = client_config.db_cache_size;
+		client_state_db_config.compaction = CompactionProfile::auto(&client_path);
+
+		let client_blockchain_db_handler = test_helpers::blockchain_restoration_db_handler(client_blockchain_db_config.clone());
+		let client_state_db_handler = test_helpers::state_restoration_db_handler(client_state_db_config.clone());
+
+		let client_blockchain_db = client_blockchain_db_handler.open(&client_path.join("blockchain_db")).unwrap();
+		let client_state_db = client_state_db_handler.open(&client_path.join("state_db")).unwrap();
 
 		let spec = Spec::new_test();
 		let service = ClientService::start(
 			ClientConfig::default(),
 			&spec,
-			client_db,
+			client_state_db,
+			client_blockchain_db,
 			&snapshot_path,
-			restoration_db_handler,
+			client_blockchain_db_handler,
+			client_state_db_handler,
 			tempdir.path(),
 			Arc::new(Miner::new_for_tests(&spec, None)),
 			Arc::new(ethcore_private_tx::DummySigner),

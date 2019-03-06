@@ -294,8 +294,8 @@ fn recover_aborted_recovery() {
 	let tempdir = TempDir::new("").unwrap();
 	let blockchain_db_config = DatabaseConfig::with_columns(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
 	let state_db_config = DatabaseConfig::with_columns(::db::NUM_STATE_DB_COLUMNS);
-	let client_blockchain_db = new_blockchain_db(::db::NUM_BLOCKCHAIN_DB_COLUMNS);
-	let client_state_db = new_state_db_backend(::db::NUM_STATE_DB_COLUMNS);
+	let client_blockchain_db = new_blockchain_db();
+	let client_state_db = new_state_db_backend();
 
 	let client2 = Client::new(
 		Default::default(),

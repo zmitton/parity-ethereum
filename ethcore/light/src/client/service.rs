@@ -125,7 +125,7 @@ mod tests {
 
 	#[test]
 	fn it_works() {
-		let db = test_helpers::new_db();
+		let db = test_helpers::new_blockchain_db();
 		let spec = Spec::new_test();
 		let cache = Arc::new(Mutex::new(Cache::new(Default::default(), Duration::from_secs(6 * 3600))));
 

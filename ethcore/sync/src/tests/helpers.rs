@@ -392,7 +392,8 @@ impl TestNet<EthPeer<EthcoreClient>> {
 		let client = EthcoreClient::new(
 			ClientConfig::default(),
 			&spec,
-			test_helpers::new_db(),
+			test_helpers::new_state_db_backend(),
+			test_helpers::new_blockchain_db(),
 			miner.clone(),
 			channel.clone()
 		).unwrap();

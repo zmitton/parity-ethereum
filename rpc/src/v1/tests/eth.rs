@@ -123,7 +123,8 @@ impl EthTester {
 		let client = Client::new(
 			config,
 			&spec,
-			test_helpers::new_db(),
+			test_helpers::new_state_db_backend(),
+			test_helpers::new_blockchain_db(),
 			miner_service.clone(),
 			IoChannel::disconnected(),
 		).unwrap();

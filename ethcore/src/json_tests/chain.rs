@@ -82,7 +82,8 @@ pub fn json_chain_test<H: FnMut(&str, HookType)>(json_data: &[u8], start_stop_ho
 			};
 
 			{
-				let db = test_helpers::new_db();
+				let blockchain_db = test_helpers::new_blockchain_db();
+				let state_db_backend = test_helpers::new_state_db_backend();
 				let mut config = ClientConfig::default();
 				if ethjson::blockchain::Engine::NoProof == blockchain.engine {
 					config.verifier_type = VerifierType::CanonNoSeal;
@@ -92,7 +93,8 @@ pub fn json_chain_test<H: FnMut(&str, HookType)>(json_data: &[u8], start_stop_ho
 				let client = Client::new(
 					config,
 					&spec,
-					db,
+					state_db_backend,
+					blockchain_db,
 					Arc::new(Miner::new_for_tests(&spec, None)),
 					IoChannel::disconnected(),
 				).unwrap();

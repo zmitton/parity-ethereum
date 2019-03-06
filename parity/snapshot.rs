@@ -187,11 +187,11 @@ impl SnapshotCommand {
 
 		client_config.snapshot = self.snapshot_conf;
 
-		let restoration_state_db_handler = db::restoration_db_handler(&client_state_db_path, &client_config, NUM_STATE_DB_COLUMNS);
+		let restoration_state_db_handler = db::restoration_state_db_handler(&client_state_db_path, &client_config);
 		let client_state_db = restoration_state_db_handler.open(&client_state_db_path)
 			.map_err(|e| format!("Failed to open database {:?}", e))?;
 
-		let restoration_blockchain_db_handler = db::restoration_db_handler(&client_blockchain_db_path, &client_config, NUM_BLOCKCHAIN_DB_COLUMNS);
+		let restoration_blockchain_db_handler = db::restoration_blockchain_db_handler(&client_blockchain_db_path, &client_config);
 		let client_blockchain_db = restoration_blockchain_db_handler.open(&client_blockchain_db_path)
 			.map_err(|e| format!("Failed to open database {:?}", e))?;
 
@@ -203,6 +203,7 @@ impl SnapshotCommand {
 			client_blockchain_db,
 			&snapshot_path,
 			restoration_blockchain_db_handler,
+			restoration_state_db_handler,
 			&self.dirs.ipc_path(),
 			// TODO [ToDr] don't use test miner here
 			// (actually don't require miner at all)

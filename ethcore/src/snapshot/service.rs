@@ -373,7 +373,6 @@ impl Service {
 		// Count the number of migrated blocks
 		let mut count = 0;
 		let blockchain_rest_db = self.blockchain_restoration_db();
-		let state_rest_db = self.state_restoration_db();
 
 		let cur_chain_info = self.client.chain_info();
 

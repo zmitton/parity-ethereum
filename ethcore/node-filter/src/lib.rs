@@ -107,12 +107,14 @@ mod test {
 		let data = include_bytes!("../res/node_filter.json");
 		let tempdir = TempDir::new("").unwrap();
 		let spec = Spec::load(&tempdir.path(), &data[..]).unwrap();
-		let client_db = test_helpers::new_db();
+		let client_blockchain_db = test_helpers::new_blockchain_db();
+		let client_state_db = test_helpers::new_state_db_backend();
 
 		let client = Client::new(
 			ClientConfig::default(),
 			&spec,
-			client_db,
+			client_state_db,
+			client_blockchain_db,
 			Arc::new(Miner::new_for_tests(&spec, None)),
 			IoChannel::disconnected(),
 		).unwrap();
