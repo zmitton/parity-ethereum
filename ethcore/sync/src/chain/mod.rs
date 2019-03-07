@@ -674,7 +674,7 @@ impl ChainSync {
 		let fast_warp = FastWarp::new().expect("Couldn't create FastWarp");
 		let state = Self::get_init_state(config.warp_sync, chain, &fast_warp);
 
-		if false {
+		if true {
 			Self::check_state_data(chain);
 		}
 

@@ -347,6 +347,12 @@ impl SyncSupplier {
 
 	/// Respond to GetFastWarp request
 	fn return_fast_warp_data(io: &SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
+		use hash::keccak;
+		use std::path::Path;
+		use std::fs;
+		use std::fs::File;
+		use std::io::prelude::*;
+
 		let account_from: H256 = r.val_at(0)?;
 		let storage_from: H256 = r.val_at(1)?;
 		trace!(target: "sync", "{} -> GetFastWarpData from {:?}::{:?}", peer_id, account_from, storage_from);
@@ -354,6 +360,28 @@ impl SyncSupplier {
 		let start = ::std::time::Instant::now();
 		let best_block_header = io.chain().best_block_header();
 		let state_root = best_block_header.state_root();
+
+		let mut cache_key_vec = account_from.to_vec();
+		cache_key_vec.append(&mut storage_from.to_vec());
+		let cache_key = format!("{:#?}", keccak(cache_key_vec));
+		let cache_folder = Path::new("/tmp/fast-warp/data-cache");
+		let cache_file = cache_folder.join(&cache_key);
+
+		match fs::metadata(&cache_file) {
+			Ok(ref metadata) if metadata.is_file() => {
+				let mut file = File::open(&cache_file).expect("Could not open cache file");
+				let mut buf = Vec::new();
+				file.read_to_end(&mut buf).expect("Could not read file to end");
+
+				trace!(target: "fast-warp", "Returning data from cache!");
+				let mut rlp = RlpStream::new();
+				rlp.append_raw(&buf, 1);
+				return Ok(Some((FAST_WARP_DATA_PACKET, rlp)));
+			},
+			_ => (),
+		}
+
+
 		let rlp = match io.chain().fast_warp_data(&state_root, &account_from, &storage_from) {
 			Ok(bytes) => {
 				let elapsed = start.elapsed();
@@ -368,6 +396,12 @@ impl SyncSupplier {
 				RlpStream::new_list(0)
 			}
 		};
+
+		{
+			fs::create_dir_all(&cache_folder).expect("Could not create cache dir");
+			let mut file = File::create(&cache_file).expect("Could not create cache file");
+			file.write_all(rlp.as_raw()).expect("Could not write to cache file");
+		}
 
 		Ok(Some((FAST_WARP_DATA_PACKET, rlp)))
 	}

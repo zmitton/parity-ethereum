@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 use std::collections::{HashSet, HashMap};
-use std::iter::FromIterator;
 use std::time::Instant;
 
 // use ethcore_blockchain::{BlockChainDB};
@@ -22,18 +21,18 @@ use block_sync::{BlockDownloader, BlockRequest, BlockDownloaderImportError as Do
 use blocks::{SyncHeader};
 use bloom_journal::Bloom;
 use bytes::Bytes;
-use ethcore::account_db::{AccountDBMut};
+use ethcore::account_db::{AccountDB, AccountDBMut};
 use ethcore::state_db::StateDB;
 use ethcore::state::Account as StateAccount;
 use ethereum_types::{H256, U256};
-use ethtrie::{TrieDB, TrieDBMut, RlpCodec};
+use ethtrie::{TrieDBMut, RlpCodec};
 use hash::{KECCAK_EMPTY, KECCAK_NULL_RLP};
 use hashdb::HashDB;
 use journaldb::JournalDB;
 use network::{PeerId};
 use rlp::{Rlp, Prototype};
 use sync_io::SyncIo;
-use trie::{Trie, TrieMut, NibbleSlice, NodeCodec, node::Node};
+use trie::{TrieMut, NibbleSlice, NodeCodec, node::Node};
 use types::basic_account::BasicAccount;
 use types::BlockNumber;
 use types::ids::BlockId;
@@ -41,55 +40,59 @@ use types::ids::BlockId;
 use super::BlockSet;
 
 /// Number of blocks bellow best-block to start fast-warp sync
-const BLOCKS_DELTA_START_SYNC: u64 = 3_000;
+const BLOCKS_DELTA_START_SYNC: u64 = 500;
 /// Number of blocks headers to download at first
-const NUM_BLOCKS_HEADERS: u64 = 50_000;
+const NUM_BLOCKS_HEADERS: u64 = 10_000;
+/// Maxmimum number of node data requests to send to one peer
+const MAX_NODE_DATA_REQUESTS: usize = 256;
 
-pub fn write_state_at(db: &mut Box<JournalDB>, state_root: H256, filename: &str) {
-	use std::fs::File;
-	use std::io::prelude::*;
+pub fn write_state_at(_db: &mut Box<JournalDB>, _state_root: H256, _filename: &str) {
+	// use std::fs::File;
+	// use std::io::prelude::*;
 
-	use ethcore::account_db::AccountDB;
+	// use ethtrie::TrieDB;
+	// use ethcore::account_db::AccountDB;
+	// use trie::Trie;
 
-	info!(target: "fast-warp", "Writting state from {:#?} at {}", state_root, filename);
+	// info!(target: "fast-warp", "Writting state from {:#?} at {}", state_root, filename);
 
-    let mut file = File::create(format!("/tmp/{}.txt", filename)).expect("Could not create file");
-	let account_trie = TrieDB::new(db.as_hashdb(), &state_root).expect("Could not create TrieDB");
+    // let mut file = File::create(format!("/tmp/{}.txt", filename)).expect("Could not create file");
+	// let account_trie = TrieDB::new(db.as_hashdb(), &state_root).expect("Could not create TrieDB");
 
-	for item in account_trie.iter().expect("Could not iter through accounts") {
-		let (account_key, account_data) = item.unwrap();
-		let account_key_hash = H256::from_slice(&account_key);
-		let account: BasicAccount = ::rlp::decode(&*account_data).unwrap();
+	// for item in account_trie.iter().expect("Could not iter through accounts") {
+	// 	let (account_key, account_data) = item.unwrap();
+	// 	let account_key_hash = H256::from_slice(&account_key);
+	// 	let account: BasicAccount = ::rlp::decode(&*account_data).unwrap();
 
-    	file.write_fmt(format_args!(
-			"{:#?};{};{};{:#?};{:#?}\n",
-			account_key_hash,
-			account.nonce, account.balance,
-			account.storage_root, account.code_hash,
-		)).unwrap();
+    // 	file.write_fmt(format_args!(
+	// 		"{:#?};{};{};{:#?};{:#?}\n",
+	// 		account_key_hash,
+	// 		account.nonce, account.balance,
+	// 		account.storage_root, account.code_hash,
+	// 	)).unwrap();
 
 
-		let account_db = AccountDB::from_hash(db.as_hashdb(), account_key_hash);
-		let account_trie_db = TrieDB::new(&account_db, &account.storage_root).unwrap();
+	// 	let account_db = AccountDB::from_hash(db.as_hashdb(), account_key_hash);
+	// 	let account_trie_db = TrieDB::new(&account_db, &account.storage_root).unwrap();
 
-		if let Some(code) = account_db.get(&account.code_hash) {
-			file.write_fmt(format_args!(
-				"\tcode={}\n",
-				hex::encode(code),
-			)).unwrap();
-		}
+	// 	if let Some(code) = account_db.get(&account.code_hash) {
+	// 		file.write_fmt(format_args!(
+	// 			"\tcode={}\n",
+	// 			hex::encode(code),
+	// 		)).unwrap();
+	// 	}
 
-		for val in account_trie_db.iter().unwrap() {
-			let (k, v) = val.unwrap();
-			let hex_key = hex::encode(k);
-			let hex_val = hex::encode(v);
+	// 	for val in account_trie_db.iter().unwrap() {
+	// 		let (k, v) = val.unwrap();
+	// 		let hex_key = hex::encode(k);
+	// 		let hex_val = hex::encode(v);
 
-			file.write_fmt(format_args!(
-				"\t{}={}\n",
-				hex_key, hex_val,
-			)).unwrap();
-		}
-	}
+	// 		file.write_fmt(format_args!(
+	// 			"\t{}={}\n",
+	// 			hex_key, hex_val,
+	// 		)).unwrap();
+	// 	}
+	// }
 }
 
 #[derive(Debug, Clone)]
@@ -298,10 +301,10 @@ impl StateDownloader {
 
 		info!(
 			target: "fast-warp",
-			"Got fast-warp data up to {:?} ({} accounts) progress={}% ; eta={}s",
+			"Got fast-warp data up to {:?} ({} accounts) progress={}% ; eta={}min",
 			last_item.0, num_accounts,
 			(progress * 10_000.0).round() / 100.0,
-			eta.round() as u32,
+			(eta / 60.0).round() as u32,
 		);
 
 		{
@@ -353,20 +356,21 @@ pub struct TrieDownloader {
 	db: Box<JournalDB>,
 	/// Bloom
 	bloom: Bloom,
+	/// Progress: (maybe) maps byte to number of remaining requests
+	/// if all u8 are at 0: should be done
+	/// u8 is the 256 possibilities of level-2
+	progress: HashMap<u8, Option<u64>>,
 }
 
 impl TrieDownloader {
 	/// Create a new Trie Downloader, targeting the given state root
 	pub fn new(db: Box<JournalDB>, target: H256) -> Self {
 		trace!(target: "fast-warp", "Starting Trie-Dl with target={:#?}", target);
-		let mut node_data_requests = HashMap::new();
+		let node_data_requests = HashMap::new();
+		let node_data_queries = HashSet::new();
 		let bloom = StateDB::load_bloom(&**db.backing());
 
-		// First, query the head of the state tree
-		node_data_requests.insert(target, NodeDataRequest::State);
-		let node_data_queries = HashSet::from_iter(vec![ target ]);
-
-		TrieDownloader {
+		let mut trie_dl = TrieDownloader {
 			common_nodes: HashSet::new(),
 			in_flight_requests: HashMap::new(),
 			node_data_prefixes: HashMap::new(),
@@ -374,7 +378,47 @@ impl TrieDownloader {
 			node_data_requests,
 			target,
 			db, bloom,
+			progress: HashMap::new(),
+		};
+
+		// First, query the head of the state tree
+		trie_dl.insert_request(target, NodeDataRequest::State, None);
+		trie_dl
+	}
+
+	pub fn insert_request(&mut self, key: H256, request: NodeDataRequest, prefixes: Option<Vec<u8>>) {
+		if let Some(prefixes) = prefixes {
+			self.node_data_prefixes.insert(key, prefixes);
 		}
+		self.node_data_requests.insert(key, request);
+		self.node_data_queries.insert(key);
+	}
+
+	fn print_stats(&self) {
+		let num_state_requests = self.node_data_requests.iter()
+			.filter(|(_, req)| match req {
+				NodeDataRequest::State => true,
+				_ => false,
+			})
+			.count();
+
+		let num_storage_requests = self.node_data_requests.iter()
+			.filter(|(_, req)| match req {
+				NodeDataRequest::Storage(_) => true,
+				_ => false,
+			})
+			.count();
+
+		let num_code_requests = self.node_data_requests.iter()
+			.filter(|(_, req)| match req {
+				NodeDataRequest::Code(_) => true,
+				_ => false,
+			})
+			.count();
+
+		trace!(target: "fast-warp", "Got {} state-reqs ; {} storage-reqs ; {} code-reqs",
+			num_state_requests, num_storage_requests, num_code_requests,
+		);
 	}
 
 	pub fn request(&mut self, peer_id: PeerId) -> FastWarpRequest {
@@ -384,7 +428,7 @@ impl TrieDownloader {
 			.collect::<Vec<H256>>();
 
 		node_data_hashes.sort_unstable();
-		let n = ::std::cmp::min(20, node_data_hashes.len());
+		let n = ::std::cmp::min(MAX_NODE_DATA_REQUESTS, node_data_hashes.len());
 		node_data_hashes = node_data_hashes[0..n].to_vec();
 
 		for node_data_hash in node_data_hashes.iter() {
@@ -403,7 +447,7 @@ impl TrieDownloader {
 			let node_data_hashes = match self.in_flight_requests.get(&peer_id) {
 				Some(vec) => vec,
 				None => return Ok(FastWarpAction::Continue),
-			};
+			}.clone();
 
 			if node_data_hashes.len() != r.item_count()? {
 				debug!(target: "sync",
@@ -430,24 +474,24 @@ impl TrieDownloader {
 						let mut acct_db = AccountDBMut::from_hash(self.db.as_hashdb_mut(), account_hash);
 						// Insert the data in DB
 						let inserted_key = acct_db.insert(&state_data);
-						if inserted_key != *node_data_key {
-							warn!("Inserted invalid code data, expected={:#?} found={:#?}", inserted_key, *node_data_key);
+						if inserted_key != node_data_key {
+							warn!("Inserted invalid code data, expected={:#?} found={:#?}", inserted_key, node_data_key);
 						}
 						continue;
 					},
 					NodeDataRequest::State => {
 						// Insert the data in DB
 						let inserted_key = self.db.as_hashdb_mut().insert(&state_data);
-						if inserted_key != *node_data_key {
-							warn!("Inserted invalid state data, expected={:#?} found={:#?}", inserted_key, *node_data_key);
+						if inserted_key != node_data_key {
+							warn!("Inserted invalid state data, expected={:#?} found={:#?}", inserted_key, node_data_key);
 						}
 					},
 					NodeDataRequest::Storage(account_hash) => {
 						let mut acct_db = AccountDBMut::from_hash(self.db.as_hashdb_mut(), account_hash);
 						// Insert the data in DB
 						let inserted_key = acct_db.insert(&state_data);
-						if inserted_key != *node_data_key {
-							warn!("Inserted invalid storage data, expected={:#?} found={:#?}", inserted_key, *node_data_key);
+						if inserted_key != node_data_key {
+							warn!("Inserted invalid storage data, expected={:#?} found={:#?}", inserted_key, node_data_key);
 						}
 					},
 				}
@@ -537,14 +581,12 @@ impl TrieDownloader {
 							},
 						};
 
-						if !self.db.as_hashdb().contains(&key) {
+						if self.db.state(&key).is_none() {
 							let mut ext_prefixes = prefix.clone();
 							let mut path_nibbles: Vec<u8> = path.iter().collect();
 							ext_prefixes.append(&mut path_nibbles);
 
-							self.node_data_prefixes.insert(key, ext_prefixes);
-							self.node_data_requests.insert(key, request.clone());
-							self.node_data_queries.insert(key);
+							self.insert_request(key, request.clone(), Some(ext_prefixes));
 						} else {
 							self.common_nodes.insert(key);
 						}
@@ -564,13 +606,11 @@ impl TrieDownloader {
 								},
 							};
 
-							if !self.db.as_hashdb().contains(&branch_key) {
-								// trace!(target: "sync", "Doesn't have branch in DB {:#?}", branch_key);
+							if self.db.state(&branch_key).is_none() {
 								let mut branch_prefixes = prefix.clone();
 								branch_prefixes.push(branch_idx as u8);
-								self.node_data_prefixes.insert(branch_key, branch_prefixes);
-								self.node_data_requests.insert(branch_key, request.clone());
-								self.node_data_queries.insert(branch_key);
+
+								self.insert_request(branch_key, request.clone(), Some(branch_prefixes));
 							} else {
 								self.common_nodes.insert(branch_key);
 							}
@@ -589,21 +629,23 @@ impl TrieDownloader {
 				let mut code_hash_queries = HashSet::new();
 
 				{
-					let db = self.db.as_hashdb_mut();
 					for (account_hash, account) in accounts_to_insert.iter() {
-						let acct_db = AccountDBMut::from_hash(db, *account_hash);
+						let (request_storage, request_code) = {
+							let acct_db = AccountDB::from_hash(self.db.as_hashdb(), *account_hash);
 
-						if account.storage_root != KECCAK_NULL_RLP && !acct_db.contains(&account.storage_root) {
+							let request_storage = account.storage_root != KECCAK_NULL_RLP && !acct_db.contains(&account.storage_root);
+							let request_code = account.code_hash != KECCAK_EMPTY && !acct_db.contains(&account.code_hash);
+
+							(request_storage, request_code)
+						};
+
+						if request_storage {
 							storage_root_queries.insert(account.storage_root);
-
-							self.node_data_requests.insert(account.storage_root, NodeDataRequest::Storage(account_hash.clone()));
-							self.node_data_queries.insert(account.storage_root);
+							self.insert_request(account.storage_root, NodeDataRequest::Storage(account_hash.clone()), None);
 						}
-						if account.code_hash != KECCAK_EMPTY && !acct_db.contains(&account.code_hash) {
+						if request_code {
 							code_hash_queries.insert(account.code_hash);
-
-							self.node_data_requests.insert(account.code_hash, NodeDataRequest::Code(account_hash.clone()));
-							self.node_data_queries.insert(account.code_hash);
+							self.insert_request(account.code_hash, NodeDataRequest::Code(account_hash.clone()), None);
 						}
 					}
 				}
@@ -653,6 +695,7 @@ impl TrieDownloader {
 			}
 		}
 
+		self.print_stats();
 		Ok(FastWarpAction::Continue)
 	}
 
@@ -927,6 +970,7 @@ impl FastWarp {
 		StateDB::commit_bloom(&mut batch, bloom_journal);
 		db.inject(&mut batch).expect("Couldn't inject batch in DB");
 		backing.write_buffered(batch);
+		db.backing().flush().expect("Could not flush KVDB");
 	}
 
 	/// Finalize the restoration

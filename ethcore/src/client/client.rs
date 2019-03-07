@@ -102,7 +102,7 @@ const MAX_QUEUE_SIZE_TO_SLEEP_ON: usize = 2;
 const MIN_HISTORY_SIZE: u64 = 8;
 /// Maxmimum time taken by a Fast-Warp query (which can be really slow on
 /// single account iterations)
-const MAX_FAST_WARP_DURATION: Duration = Duration::from_secs(5);
+const MAX_FAST_WARP_DURATION: Duration = Duration::from_secs(20);
 
 /// Report on the status of a client.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
