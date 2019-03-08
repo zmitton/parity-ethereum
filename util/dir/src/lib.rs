@@ -167,7 +167,8 @@ impl DatabaseDirectories {
 
 	/// Generic client state DB path
 	pub fn client_state_db_path(&self, pruning: Algorithm) -> PathBuf {
-		self.db_root_path().join(pruning.as_internal_name_str()).join("state_db")
+		//self.db_root_path().join(pruning.as_internal_name_str()).join("state_db")
+		PathBuf::from("/home/elferdo/tmp/in-memory").join(pruning.as_internal_name_str()).join("state_db")
 	}
 
 	/// Generic client blockchain DB path

@@ -337,9 +337,11 @@ impl Service {
 
 	// state restoration db path.
 	fn state_restoration_db(&self) -> PathBuf {
-		let mut dir = self.restoration_dir();
-		dir.push("state_db");
-		dir
+		// FHC commented for testing
+		// let mut dir = self.restoration_dir();
+		// dir.push("state_db");
+		// dir
+		PathBuf::from("/home/elferdo/tmp/in-memory/restoration/state_db")
 	}
 
 	// temporary snapshot recovery path.
