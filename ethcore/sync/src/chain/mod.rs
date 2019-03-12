@@ -806,7 +806,7 @@ impl ChainSync {
 				break;
 			}
 		}
-		info!(target: "sync", "Got state-root data until: {:#}", block_header.number());
+		info!(target: "fast-warp", "Got state-root data until: {:#}", block_header.number());
 	}
 
 	/// Restart sync

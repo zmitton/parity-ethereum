@@ -364,7 +364,8 @@ impl SyncSupplier {
 		let mut cache_key_vec = account_from.to_vec();
 		cache_key_vec.append(&mut storage_from.to_vec());
 		let cache_key = format!("{:#?}", keccak(cache_key_vec));
-		let cache_folder = Path::new("/tmp/fast-warp/data-cache");
+		let cache_dir_str = format!("/home/nicolas/Parity/fast-warp/data-cache/{:#?}", state_root);
+		let cache_folder = Path::new(&cache_dir_str);
 		let cache_file = cache_folder.join(&cache_key);
 
 		match fs::metadata(&cache_file) {

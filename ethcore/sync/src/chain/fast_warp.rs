@@ -251,7 +251,6 @@ impl StateDownloader {
 				let account_data_rlp = account_rlp.at(1).expect("Invalid account_data RLP");
 				let account_nonce: U256 = account_data_rlp.val_at(0).expect("Invalid account nonce RLP");
 				let account_balance: U256 = account_data_rlp.val_at(1).expect("Invalid account nonce RLP");
-				let account_storage_root: H256 = account_data_rlp.val_at(2).expect("Invalid account nonce RLP");
 
 				let code_hash = match account_data_rlp.item_count().expect("Invalid account_data RLP") {
 					3 => KECCAK_EMPTY,
@@ -276,14 +275,7 @@ impl StateDownloader {
 
 				// Ie. not the last one, storage_root should be known
 				let is_last_item = idx == num_accounts - 1;
-				if !is_last_item {
-					if account_storage_root != storage_root {
-						trace!(target: "sync",
-							"Invalid storage_root! expected {:?}, got {:?}",
-							account_storage_root, storage_root
-						);
-					}
-				} else {
+				if is_last_item {
 					last_item = (account_hash, last_storage_key, storage_root);
 				}
 			}
@@ -348,18 +340,12 @@ pub struct TrieDownloader {
 	in_flight_requests: HashMap<PeerId, Vec<H256>>,
 	// Node Data keys to query to remote peer
 	node_data_queries: HashSet<H256>,
-	// Nibble Prefixes for each key
-	node_data_prefixes: HashMap<H256, Vec<u8>>,
 	// What requests have been sent
-	node_data_requests: HashMap<H256, NodeDataRequest>,
+	node_data_requests: HashMap<H256, Vec<(NodeDataRequest, Option<Vec<u8>>)>>,
 	/// Underlaying JournalDB
 	db: Box<JournalDB>,
 	/// Bloom
 	bloom: Bloom,
-	/// Progress: (maybe) maps byte to number of remaining requests
-	/// if all u8 are at 0: should be done
-	/// u8 is the 256 possibilities of level-2
-	progress: HashMap<u8, Option<u64>>,
 }
 
 impl TrieDownloader {
@@ -373,12 +359,10 @@ impl TrieDownloader {
 		let mut trie_dl = TrieDownloader {
 			common_nodes: HashSet::new(),
 			in_flight_requests: HashMap::new(),
-			node_data_prefixes: HashMap::new(),
 			node_data_queries,
 			node_data_requests,
 			target,
 			db, bloom,
-			progress: HashMap::new(),
 		};
 
 		// First, query the head of the state tree
@@ -387,30 +371,43 @@ impl TrieDownloader {
 	}
 
 	pub fn insert_request(&mut self, key: H256, request: NodeDataRequest, prefixes: Option<Vec<u8>>) {
-		if let Some(prefixes) = prefixes {
-			self.node_data_prefixes.insert(key, prefixes);
+		use std::collections::hash_map::Entry;
+
+		match self.node_data_requests.entry(key) {
+			Entry::Vacant(entry) => {
+				entry.insert(vec![(request, prefixes)]);
+			},
+			Entry::Occupied(mut entry) => {
+				entry.get_mut().push((request, prefixes));
+			},
 		}
-		self.node_data_requests.insert(key, request);
 		self.node_data_queries.insert(key);
 	}
 
 	fn print_stats(&self) {
-		let num_state_requests = self.node_data_requests.iter()
-			.filter(|(_, req)| match req {
+		let requests: Vec<&NodeDataRequest> = self.node_data_requests.iter()
+			.map(|(_, requests)| -> Vec<&NodeDataRequest> {
+				requests.iter().map(|(req, _)| req).collect()
+			})
+			.flatten()
+			.collect();
+
+		let num_state_requests = requests.iter()
+			.filter(|req| match req {
 				NodeDataRequest::State => true,
 				_ => false,
 			})
 			.count();
 
-		let num_storage_requests = self.node_data_requests.iter()
-			.filter(|(_, req)| match req {
+		let num_storage_requests = requests.iter()
+			.filter(|req| match req {
 				NodeDataRequest::Storage(_) => true,
 				_ => false,
 			})
 			.count();
 
-		let num_code_requests = self.node_data_requests.iter()
-			.filter(|(_, req)| match req {
+		let num_code_requests = requests.iter()
+			.filter(|req| match req {
 				NodeDataRequest::Code(_) => true,
 				_ => false,
 			})
@@ -466,167 +463,145 @@ impl TrieDownloader {
 			let mut accounts_to_insert = Vec::new();
 
 			for (rlp_data, node_data_key) in r.iter().zip(node_data_hashes) {
-				let request = self.node_data_requests.remove(&node_data_key).expect("Could not remove node data request");
-				let state_data: Bytes = rlp_data.data()?.to_vec();
+				let requests = self.node_data_requests.remove(&node_data_key).expect("Could not remove node data request");
 
-				match request {
-					NodeDataRequest::Code(account_hash) => {
-						let mut acct_db = AccountDBMut::from_hash(self.db.as_hashdb_mut(), account_hash);
-						// Insert the data in DB
-						let inserted_key = acct_db.insert(&state_data);
-						if inserted_key != node_data_key {
-							warn!("Inserted invalid code data, expected={:#?} found={:#?}", inserted_key, node_data_key);
-						}
-						continue;
-					},
-					NodeDataRequest::State => {
-						// Insert the data in DB
-						let inserted_key = self.db.as_hashdb_mut().insert(&state_data);
-						if inserted_key != node_data_key {
-							warn!("Inserted invalid state data, expected={:#?} found={:#?}", inserted_key, node_data_key);
-						}
-					},
-					NodeDataRequest::Storage(account_hash) => {
-						let mut acct_db = AccountDBMut::from_hash(self.db.as_hashdb_mut(), account_hash);
-						// Insert the data in DB
-						let inserted_key = acct_db.insert(&state_data);
-						if inserted_key != node_data_key {
-							warn!("Inserted invalid storage data, expected={:#?} found={:#?}", inserted_key, node_data_key);
-						}
-					},
-				}
+				for (request, prefix) in requests {
+					let prefix = prefix.unwrap_or_default();
+					let state_data: Bytes = rlp_data.data()?.to_vec();
 
-				let node = RlpCodec::decode(&state_data)?;
-
-				let prefix = self.node_data_prefixes.remove(&node_data_key).unwrap_or_default();
-				// The request that was sent should always exist!
-				self.node_data_queries.remove(&node_data_key);
-
-				match node {
-					Node::Empty => (),
-					Node::Leaf(path, data) => {
-
-						let prefix_len = prefix.len();
-						let mut nibble_builder = Vec::new();
-						let mut i = 0;
-						let mut offset = 0;
-						if prefix_len % 2 == 1 {
-							nibble_builder.push(prefix[0]);
-							i = 1;
-							offset = 1;
-						}
-						while i < prefix_len {
-							nibble_builder.push(16 * prefix[i] + prefix[i + 1]);
-							i += 2;
-						}
-
-						let nibble_prefix = NibbleSlice::new_offset(&nibble_builder, offset);
-						let hash_nible = NibbleSlice::new_composed(&nibble_prefix, &path);
-
-						let key_vec = hash_nible.encoded(false);
-						// First byte is 0 if length is even ; it should always be 32
-						let key = H256::from_slice(&key_vec[1..]);
-						// warn!("Got NodeLeaf: r={:?} ; k={:?} ; data={:?}", request, key, data);
-
-						match request {
-							NodeDataRequest::State => {
-								let account_hash = key;
-								let account: BasicAccount = Rlp::new(data).as_val()?;
-								accounts_to_insert.push((account_hash, account));
-							},
-							NodeDataRequest::Storage(_account_hash) => {
-								// let account = {
-								// 	let account_trie = if *state_root != KECCAK_NULL_RLP {
-								// 		TrieDBMut::from_existing(db.as_hashdb_mut(), state_root).expect("Could not get account_trie")
-								// 	} else {
-								// 		TrieDBMut::new(db.as_hashdb_mut(), state_root)
-								// 	};
-								// 	account_trie.get(&account_hash).expect("Could not account_trie::get ").map(|bytes| -> BasicAccount {
-								// 		Rlp::new(&bytes).as_val().expect("Invalid Account data in DB")
-								// 	})
-								// };
-
-								// match account {
-								// 	None => {
-								// 		warn!(target: "fast-warp", "Could not find account {:#} in DB", account_hash);
-								// 	},
-								// 	Some(account) => {
-								// 		let mut acct_db = AccountDBMut::from_hash(db.as_hashdb_mut(), account_hash);
-								// 		let mut storage_root = account.storage_root.clone();
-
-								// 		let mut storage_trie = if storage_root.is_zero() {
-								// 			TrieDBMut::new(&mut acct_db, &mut storage_root)
-								// 		} else {
-								// 			TrieDBMut::from_existing(&mut acct_db, &mut storage_root).expect("Could not get storage_trie")
-								// 		};
-
-								// 		storage_trie.insert(&key, &data).expect("Could not insert in storage_trie");
-								// 	},
-								// }
-							},
-							_ => {
-								warn!("Got request...");
-							},
-						}
-					},
-					Node::Extension(path, key_bytes) => {
-						let key_rlp = Rlp::new(key_bytes);
-						let key: H256 = match key_rlp.prototype()? {
-							Prototype::Null => continue,
-							Prototype::Data(0) => continue,
-							Prototype::Data(32) => key_rlp.as_val()?,
-							proto => {
-								warn!("Invalid Extension Key RLP: {:?}", proto);
+					match request {
+						NodeDataRequest::Code(account_hash) => {
+							let mut acct_db = AccountDBMut::from_hash(self.db.as_hashdb_mut(), account_hash);
+							// Insert the data in DB
+							let inserted_key = acct_db.insert(&state_data);
+							if inserted_key != node_data_key {
+								warn!("Inserted invalid code data, expected={:#?} found={:#?}", inserted_key, node_data_key);
+								acct_db.remove(&inserted_key);
 								continue;
-							},
-						};
+							}
+							continue;
+						},
+						NodeDataRequest::Storage(account_hash) => {
+							let mut acct_db = AccountDBMut::from_hash(self.db.as_hashdb_mut(), account_hash);
+							// Insert the data in DB
+							let inserted_key = acct_db.insert(&state_data);
+							if inserted_key != node_data_key {
+								warn!("Inserted invalid storage data, expected={:#?} found={:#?}", inserted_key, node_data_key);
+								acct_db.remove(&inserted_key);
+								continue;
+							}
+						},
+						NodeDataRequest::State => {
+							// Insert the data in DB
+							let inserted_key = self.db.as_hashdb_mut().insert(&state_data);
+							if inserted_key != node_data_key {
+								warn!("Inserted invalid state data, expected={:#?} found={:#?}", inserted_key, node_data_key);
+								self.db.as_hashdb_mut().remove(&inserted_key);
+								continue;
+							}
+						},
+					}
 
-						if self.db.state(&key).is_none() {
+					let node = RlpCodec::decode(&state_data)?;
+
+					// The request that was sent should always exist!
+					self.node_data_queries.remove(&node_data_key);
+
+					match node {
+						Node::Empty => (),
+						Node::Leaf(path, data) => {
+							let prefix_len = prefix.len();
+							let mut nibble_builder = Vec::new();
+							let mut i = 0;
+							let mut offset = 0;
+							if prefix_len % 2 == 1 {
+								nibble_builder.push(prefix[0]);
+								i = 1;
+								offset = 1;
+							}
+							while i < prefix_len {
+								nibble_builder.push(16 * prefix[i] + prefix[i + 1]);
+								i += 2;
+							}
+
+							let nibble_prefix = NibbleSlice::new_offset(&nibble_builder, offset);
+							let hash_nible = NibbleSlice::new_composed(&nibble_prefix, &path);
+
+							let key_vec = hash_nible.encoded(false);
+							// First byte is 0 if length is even ; it should always be 32
+							let key = H256::from_slice(&key_vec[1..]);
+							// warn!("Got NodeLeaf: r={:?} ; k={:?} ; data={:?}", request, key, data);
+
+							match request {
+								NodeDataRequest::State => {
+									let account_hash = key;
+									let account: BasicAccount = Rlp::new(data).as_val()?;
+									accounts_to_insert.push((account_hash, account));
+								},
+								NodeDataRequest::Storage(_account_hash) => (),
+								_ => {
+									warn!("Got request...");
+								},
+							}
+						},
+						Node::Extension(path, key_bytes) => {
+							let key_rlp = Rlp::new(key_bytes);
+							let key: H256 = match key_rlp.prototype()? {
+								Prototype::Null => continue,
+								Prototype::Data(0) => continue,
+								Prototype::Data(32) => key_rlp.as_val()?,
+								proto => {
+									warn!("Invalid Extension Key RLP: {:?}", proto);
+									continue;
+								},
+							};
+
 							let mut ext_prefixes = prefix.clone();
 							let mut path_nibbles: Vec<u8> = path.iter().collect();
 							ext_prefixes.append(&mut path_nibbles);
 
 							self.insert_request(key, request.clone(), Some(ext_prefixes));
-						} else {
-							self.common_nodes.insert(key);
-						}
-					},
-					Node::Branch(branches, data_opt) => {
-						for (branch_idx, branch_rlp) in branches.iter().enumerate() {
-							let branch_rlp = Rlp::new(branch_rlp);
-							let branch_key: H256 = match branch_rlp.prototype()? {
-								Prototype::Null => continue,
-								Prototype::Data(0) => continue,
-								Prototype::Data(32) => {
-									branch_rlp.as_val()?
-								},
-								proto => {
-									error!("Invalid branch RLP: {:?}", proto);
-									continue;
-								},
-							};
+							// if !self.has_key(&key, &request) {
+							// } else {
+							// 	self.common_nodes.insert(key);
+							// }
+						},
+						Node::Branch(branches, data_opt) => {
+							for (branch_idx, branch_rlp) in branches.iter().enumerate() {
+								let branch_rlp = Rlp::new(branch_rlp);
+								let branch_key: H256 = match branch_rlp.prototype()? {
+									Prototype::Null => continue,
+									Prototype::Data(0) => continue,
+									Prototype::Data(32) => {
+										branch_rlp.as_val()?
+									},
+									proto => {
+										error!("Invalid branch RLP: {:?}", proto);
+										continue;
+									},
+								};
 
-							if self.db.state(&branch_key).is_none() {
-								let mut branch_prefixes = prefix.clone();
-								branch_prefixes.push(branch_idx as u8);
+								if !self.has_key(&branch_key, &request) {
+									let mut branch_prefixes = prefix.clone();
+									branch_prefixes.push(branch_idx as u8);
 
-								self.insert_request(branch_key, request.clone(), Some(branch_prefixes));
-							} else {
-								self.common_nodes.insert(branch_key);
+									self.insert_request(branch_key, request.clone(), Some(branch_prefixes));
+								} else {
+									self.common_nodes.insert(branch_key);
+								}
 							}
-						}
-						if let Some(branch_data) = data_opt {
-							warn!("Node Branch Data: r={:?} ; d={:#?}", request, branch_data);
-						}
-					},
+
+							if let Some(branch_data) = data_opt {
+								warn!("Node Branch Data: r={:?} ; d={:#?}", request, branch_data);
+							}
+						},
+					}
 				}
 			}
 
 			if accounts_to_insert.len() > 0 {
-				// trace!(target: "sync", "New/Modified accounts detected!\n{:#?}", accounts_to_insert);
-
-				let mut storage_root_queries = HashSet::new();
-				let mut code_hash_queries = HashSet::new();
+				// let mut storage_root_queries = HashSet::new();
+				// let mut code_hash_queries = HashSet::new();
 
 				{
 					for (account_hash, account) in accounts_to_insert.iter() {
@@ -640,11 +615,11 @@ impl TrieDownloader {
 						};
 
 						if request_storage {
-							storage_root_queries.insert(account.storage_root);
+							// storage_root_queries.insert(account.storage_root);
 							self.insert_request(account.storage_root, NodeDataRequest::Storage(account_hash.clone()), None);
 						}
 						if request_code {
-							code_hash_queries.insert(account.code_hash);
+							// code_hash_queries.insert(account.code_hash);
 							self.insert_request(account.code_hash, NodeDataRequest::Code(account_hash.clone()), None);
 						}
 					}
@@ -697,6 +672,20 @@ impl TrieDownloader {
 
 		self.print_stats();
 		Ok(FastWarpAction::Continue)
+	}
+
+	fn has_key(&self, key: &H256, request: &NodeDataRequest) -> bool {
+		match request {
+			NodeDataRequest::Code(account_hash) | NodeDataRequest::Storage(account_hash) => {
+				let acct_db = AccountDB::from_hash(self.db.as_hashdb(), *account_hash);
+				acct_db.contains(key)
+			},
+			NodeDataRequest::State => {
+				self.db.backing().get(::ethcore_db::COL_STATE, &key)
+					.map(|val_opt| val_opt.is_some())
+					.unwrap_or(false)
+			},
+		}
 	}
 
 	/// Prune the DB removing all the old state data from the FastWarpSync state
