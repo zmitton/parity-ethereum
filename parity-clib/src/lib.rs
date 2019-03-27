@@ -17,14 +17,7 @@
 //! Note that all the structs and functions here are documented in `parity.h`, to avoid
 //! duplicating documentation.
 
-extern crate futures;
-extern crate panic_hook;
-extern crate parity_ethereum;
-extern crate tokio;
-extern crate tokio_current_thread;
-
-#[cfg(feature = "jni")]
-extern crate jni;
+#![warn(rust_2018_idioms)]
 
 #[cfg(feature = "jni")]
 mod java;
@@ -43,10 +36,14 @@ use tokio_current_thread::CurrentThread;
 type CCallback = Option<extern "C" fn(*mut c_void, *const c_char, usize)>;
 type CheckedQuery<'a> = (&'a RunningClient, &'static str);
 
+/// Parity request related errors
 pub mod error {
+	/// Received an empty response
 	pub const EMPTY: &str = r#"{"jsonrpc":"2.0","result":"null","id":1}"#;
+	/// No reply received within specified time
 	pub const TIMEOUT: &str = r#"{"jsonrpc":"2.0","result":"timeout","id":1}"#;
-	pub const SUBSCRIBE: &str = r#"{"jsonrpc":"2.0","result":"subcribe_fail","id":1}"#;
+	/// Subscription failed
+	pub const SUBSCRIBE: &str = r#"{"jsonrpc":"2.0","result":"subscribe_fail","id":1}"#;
 }
 
 #[repr(C)]
@@ -243,7 +240,7 @@ pub unsafe extern fn parity_set_logger(
 }
 
 // WebSocket event loop
-fn parity_ws_worker(client: &RunningClient, query: &str, callback: Arc<Callback>) -> *const c_void {
+fn parity_ws_worker(client: &RunningClient, query: &str, callback: Arc<dyn Callback>) -> *const c_void {
 	let (tx, mut rx) = mpsc::channel(1);
 	let session = Arc::new(PubSubSession::new(tx));
 	let query_future = client.rpc_query(query, Some(session.clone()));
@@ -274,7 +271,7 @@ fn parity_ws_worker(client: &RunningClient, query: &str, callback: Arc<Callback>
 }
 
 // RPC event loop that runs for at most `timeout_ms`
-fn parity_rpc_worker(client: &RunningClient, query: &str, callback: Arc<Callback>, timeout_ms: u64) {
+fn parity_rpc_worker(client: &RunningClient, query: &str, callback: Arc<dyn Callback>, timeout_ms: u64) {
 	let cb = callback.clone();
 	let query = client.rpc_query(query, None).map(move |response| {
 		let response = response.unwrap_or_else(|| error::EMPTY.to_string());

@@ -18,9 +18,10 @@ use std::{mem, ptr};
 use std::ffi::c_void;
 use std::sync::Arc;
 
-use {Callback, parity_config_from_cli, parity_destroy, parity_rpc_worker, parity_start, parity_set_logger,
-	parity_unsubscribe_ws, parity_ws_worker, ParityParams};
-
+use crate::{
+    parity_config_from_cli, parity_destroy, parity_rpc_worker, parity_set_logger, parity_start,
+    parity_unsubscribe_ws, parity_ws_worker, Callback, ParityParams,
+};
 use jni::{JavaVM, JNIEnv};
 use jni::objects::{JClass, JString, JObject, JValue, GlobalRef};
 use jni::sys::{jlong, jobjectArray, va_list};
