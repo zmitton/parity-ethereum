@@ -25,7 +25,6 @@ use blockchain::{BlockReceipts, BlockChain, BlockChainDB, BlockProvider, TreeRou
 use bytes::Bytes;
 use call_contract::{CallContract, RegistryInfo};
 use ethcore_miner::pool::VerifiedTransaction;
-use ethcore_miner::service_transaction_checker::ServiceTransactionChecker;
 use ethereum_types::{H256, Address, U256};
 use evm::Schedule;
 use hash::keccak;
@@ -1673,6 +1672,10 @@ impl BlockChainClient for Client {
 		r
 	}
 
+	fn queue_info(&self) -> BlockQueueInfo {
+		self.importer.block_queue.queue_info()
+	}
+
 	fn disable(&self) {
 		self.set_mode(Mode::Off);
 		self.enabled.store(false, AtomicOrdering::Relaxed);
@@ -1935,10 +1938,6 @@ impl BlockChainClient for Client {
 		self.chain.read().block_receipts(hash)
 	}
 
-	fn queue_info(&self) -> BlockQueueInfo {
-		self.importer.block_queue.queue_info()
-	}
-
 	fn is_queue_empty(&self) -> bool {
 		self.importer.block_queue.is_empty()
 	}
@@ -2157,10 +2156,14 @@ impl BlockChainClient for Client {
 
 	fn transact_contract(&self, address: Address, data: Bytes) -> Result<(), transaction::Error> {
 		let authoring_params = self.importer.miner.authoring_params();
-		let service_transaction_checker = ServiceTransactionChecker::default();
-		let gas_price = match service_transaction_checker.check_address(self, authoring_params.author) {
-			Ok(true) => U256::zero(),
-			_ => self.importer.miner.sensible_gas_price(),
+		let service_transaction_checker = self.importer.miner.service_transaction_checker();
+		let gas_price = if let Some(checker) = service_transaction_checker {
+			match checker.check_address(self, authoring_params.author) {
+				Ok(true) => U256::zero(),
+				_ => self.importer.miner.sensible_gas_price(),
+			}
+		} else {
+			self.importer.miner.sensible_gas_price()
 		};
 		let transaction = transaction::Transaction {
 			nonce: self.latest_nonce(&authoring_params.author),

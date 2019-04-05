@@ -38,8 +38,7 @@ use types::filter::Filter as EthcoreFilter;
 use types::ids::BlockId;
 
 use v1::impls::eth_filter::Filterable;
-use v1::helpers::{errors, limit_logs};
-use v1::helpers::{SyncPollFilter, PollManager};
+use v1::helpers::{errors, limit_logs, SyncPollFilter, PollManager};
 use v1::helpers::deprecated::{self, DeprecationNotice};
 use v1::helpers::light_fetch::{self, LightFetch};
 use v1::traits::Eth;
@@ -271,11 +270,8 @@ where
 		Ok(Default::default())
 	}
 
-	fn gas_price(&self) -> Result<U256> {
-		Ok(self.cache.lock().gas_price_corpus()
-			.and_then(|c| c.percentile(self.gas_price_percentile).cloned())
-			.map(U256::from)
-			.unwrap_or_else(Default::default))
+	fn gas_price(&self) -> BoxFuture<U256> {
+		Box::new(self.fetcher().gas_price())
 	}
 
 	fn accounts(&self) -> Result<Vec<H160>> {
@@ -292,7 +288,7 @@ where
 	}
 
 	fn balance(&self, address: H160, num: Option<BlockNumber>) -> BoxFuture<U256> {
-		Box::new(self.fetcher().account(address, num.unwrap_or_default().to_block_id())
+		Box::new(self.fetcher().account(address, num.unwrap_or_default().to_block_id(), self.transaction_queue.clone())
 			.map(|acc| acc.map_or(0.into(), |a| a.balance)))
 	}
 
@@ -309,7 +305,7 @@ where
 	}
 
 	fn transaction_count(&self, address: H160, num: Option<BlockNumber>) -> BoxFuture<U256> {
-		Box::new(self.fetcher().account(address, num.unwrap_or_default().to_block_id())
+		Box::new(self.fetcher().account(address, num.unwrap_or_default().to_block_id(), self.transaction_queue.clone())
 			.map(|acc| acc.map_or(0.into(), |a| a.nonce)))
 	}
 
@@ -405,7 +401,7 @@ where
 	}
 
 	fn call(&self, req: CallRequest, num: Option<BlockNumber>) -> BoxFuture<Bytes> {
-		Box::new(self.fetcher().proved_read_only_execution(req, num).and_then(|res| {
+		Box::new(self.fetcher().proved_read_only_execution(req, num, self.transaction_queue.clone()).and_then(|res| {
 			match res {
 				Ok(exec) => Ok(exec.output.into()),
 				Err(e) => Err(errors::execution(e)),
@@ -415,7 +411,7 @@ where
 
 	fn estimate_gas(&self, req: CallRequest, num: Option<BlockNumber>) -> BoxFuture<U256> {
 		// TODO: binary chop for more accurate estimates.
-		Box::new(self.fetcher().proved_read_only_execution(req, num).and_then(|res| {
+		Box::new(self.fetcher().proved_read_only_execution(req, num, self.transaction_queue.clone()).and_then(|res| {
 			match res {
 				Ok(exec) => Ok(exec.refunded + exec.gas_used),
 				Err(e) => Err(errors::execution(e)),
@@ -424,15 +420,22 @@ where
 	}
 
 	fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<Transaction>> {
-		{
-			let tx_queue = self.transaction_queue.read();
-			if let Some(tx) = tx_queue.get(&hash) {
+		let in_txqueue = self.transaction_queue.read().get(&hash).is_some();
+
+		// The transaction is in the `local txqueue` then fetch the latest state from the network and attempt
+		// to cull the transaction queue.
+		if in_txqueue {
+			// Note, this will block (relies on HTTP timeout) to make sure `cull` will finish to avoid having to call
+			// `eth_getTransactionByHash` more than once to ensure the `txqueue` is up to `date` when it is called
+			if let Err(e) = self.fetcher().light_cull(self.transaction_queue.clone()).wait() {
+				debug!(target: "cull", "failed because of: {:?}", e);
+			}
+			if let Some(tx) = self.transaction_queue.read().get(&hash) {
 				return Box::new(future::ok(Some(Transaction::from_pending(
 					tx.clone(),
 				))));
 			}
 		}
-
 		Box::new(self.fetcher().transaction_by_hash(hash).map(|x| x.map(|(tx, _)| tx)))
 	}
 
