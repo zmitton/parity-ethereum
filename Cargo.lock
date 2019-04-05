@@ -1969,7 +1969,7 @@ dependencies = [
 [[package]]
 name = "kvdb"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/parity-common?branch=ao-lmdb#c990ef9b0452b35653276bf324c33f4d8e4ffb84"
+source = "git+https://github.com/paritytech/parity-common?branch=ao-lmdb#2918a5bdfd5ce0269861d330be6d32a5dfbeb6dc"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fs-swap 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1984,7 +1984,7 @@ dependencies = [
 [[package]]
 name = "kvdb-lmdb"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common?branch=ao-lmdb#c990ef9b0452b35653276bf324c33f4d8e4ffb84"
+source = "git+https://github.com/paritytech/parity-common?branch=ao-lmdb#2918a5bdfd5ce0269861d330be6d32a5dfbeb6dc"
 dependencies = [
  "fs-swap 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2000,7 +2000,7 @@ dependencies = [
 [[package]]
 name = "kvdb-memorydb"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/parity-common?branch=ao-lmdb#c990ef9b0452b35653276bf324c33f4d8e4ffb84"
+source = "git+https://github.com/paritytech/parity-common?branch=ao-lmdb#2918a5bdfd5ce0269861d330be6d32a5dfbeb6dc"
 dependencies = [
  "kvdb 0.2.0 (git+https://github.com/paritytech/parity-common?branch=ao-lmdb)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2446,7 +2446,7 @@ dependencies = [
 [[package]]
 name = "parity-bytes"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common?branch=ao-lmdb#c990ef9b0452b35653276bf324c33f4d8e4ffb84"
+source = "git+https://github.com/paritytech/parity-common?branch=ao-lmdb#2918a5bdfd5ce0269861d330be6d32a5dfbeb6dc"
 
 [[package]]
 name = "parity-bytes"
@@ -3159,7 +3159,7 @@ name = "rand_chacha"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rand_core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand_core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -3181,7 +3181,7 @@ name = "rand_hc"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rand_core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand_core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3206,7 +3206,7 @@ name = "rand_xorshift"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rand_core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand_core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
