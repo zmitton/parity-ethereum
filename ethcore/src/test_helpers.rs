@@ -29,7 +29,7 @@ use evm::Factory as EvmFactory;
 use hash::keccak;
 use io::IoChannel;
 use kvdb::KeyValueDB;
-use kvdb_lmdb::Database;
+use kvdb_lmdb::{Database, DatabaseConfig};
 use parking_lot::RwLock;
 use rlp::{self, RlpStream};
 use tempdir::TempDir;
@@ -305,8 +305,9 @@ pub fn new_temp_db(tempdir: &Path) -> Arc<BlockChainDB> {
 	let blooms_dir = TempDir::new("").unwrap();
 	let trace_blooms_dir = TempDir::new("").unwrap();
 	let key_value_dir = tempdir.join("key_value");
+	let db_config = DatabaseConfig::new(::db::NUM_COLUMNS.unwrap());
 
-	let key_value_db = Database::open(key_value_dir.to_str().unwrap(), ::db::NUM_COLUMNS.unwrap()).unwrap();
+	let key_value_db = Database::open(&db_config, key_value_dir.to_str().unwrap()).unwrap();
 
 	let db = TestBlockChainDB {
 		blooms: blooms_db::Database::open(blooms_dir.path()).unwrap(),
@@ -345,7 +346,8 @@ pub fn restoration_db_handler() -> Box<BlockChainDBHandler> {
 
 	impl BlockChainDBHandler for RestorationDBHandler {
 		fn open(&self, db_path: &Path) -> io::Result<Arc<BlockChainDB>> {
-			let key_value = Arc::new(Database::open(&db_path.to_string_lossy(), ::db::NUM_COLUMNS.unwrap())?);
+			let db_config = DatabaseConfig::new(::db::NUM_COLUMNS.unwrap());
+			let key_value = Arc::new(Database::open(&db_config, &db_path.to_string_lossy())?);
 			let blooms_path = db_path.join("blooms");
 			let trace_blooms_path = db_path.join("trace_blooms");
 			fs::create_dir_all(&blooms_path)?;

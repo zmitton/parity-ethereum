@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 common-types = { path = "../../ethcore/types" }
 ethcore-io = { path = "../../util/io" }
-kvdb = "0.1"
+kvdb = "0.2"
 log = "0.4"
 rlp = { version = "0.3.0", features = ["ethereum"] }
 serde = "1.0"
@@ -16,4 +16,4 @@ serde_json = "1.0"
 
 [dev-dependencies]
 ethkey = { path = "../../accounts/ethkey" }
-kvdb-memorydb = "0.1"
+kvdb-memorydb = "0.2"

@@ -24,7 +24,7 @@ use blooms_db;
 use ethcore_db::NUM_COLUMNS;
 use kvdb::KeyValueDB;
 use self::ethcore_blockchain::{BlockChainDBHandler, BlockChainDB};
-use self::kvdb_lmdb::Database as Lmdb;
+use self::kvdb_lmdb::{Database as Lmdb, DatabaseConfig};
 
 mod blooms;
 
@@ -100,5 +100,6 @@ pub fn open_db(client_path: &str) -> io::Result<Arc<BlockChainDB>> {
 
 
 fn open_kvdb(client_path: &str) -> io::Result<Arc<KeyValueDB>> {
-	Ok(Arc::new(Lmdb::open(client_path, NUM_COLUMNS.unwrap_or_default())?))
+	let config = DatabaseConfig::new(NUM_COLUMNS.unwrap_or_default());
+	Ok(Arc::new(Lmdb::open(&config, client_path)?))
 }
