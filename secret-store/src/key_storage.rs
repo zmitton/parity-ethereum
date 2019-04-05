@@ -417,7 +417,7 @@ pub mod tests {
 	use self::tempdir::TempDir;
 	use ethereum_types::{Address, H256};
 	use ethkey::{Random, Generator, Public, Secret, public_to_address};
-	use kvdb_rocksdb::Database;
+	use kvdb_lmdb::Database;
 	use types::{Error, ServerKeyId};
 	use super::{DB_META_KEY_VERSION, CURRENT_VERSION, KeyStorage, PersistentKeyStorage, DocumentKeyShare,
 		DocumentKeyShareVersion, CurrentSerializableDocumentKeyShare, upgrade_db, SerializableDocumentKeyShareV0,

@@ -31,7 +31,7 @@ use error::{Error, ErrorKind};
 use rand::{XorShiftRng, SeedableRng};
 use ethereum_types::H256;
 use journaldb::{self, Algorithm};
-use kvdb_lmdb::Database;
+use kvdb_lmdb::{Database, DatabaseConfig};
 use parking_lot::Mutex;
 use tempdir::TempDir;
 
@@ -68,7 +68,8 @@ fn snap_and_restore() {
 
 	let db_path = tempdir.path().join("db");
 	let db = {
-		let new_db = Arc::new(Database::open(&db_path.to_string_lossy(), ::db::NUM_COLUMNS.unwrap()).unwrap());
+		let config = DatabaseConfig::new(::db::NUM_COLUMNS.unwrap());
+		let new_db = Arc::new(Database::open(&config, &db_path.to_string_lossy()).unwrap());
 		let mut rebuilder = StateRebuilder::new(new_db.clone(), Algorithm::OverlayRecent);
 		let reader = PackedReader::new(&snap_file).unwrap().unwrap();
 
@@ -135,7 +136,8 @@ fn get_code_from_prev_chunk() {
 	let chunk2 = make_chunk(acc, h2);
 
 	let tempdir = TempDir::new("").unwrap();
-	let new_db = Arc::new(Database::open(tempdir.path().to_str().unwrap(), ::db::NUM_COLUMNS.unwrap()).unwrap());
+	let config = DatabaseConfig::new(::db::NUM_COLUMNS.unwrap());
+	let new_db = Arc::new(Database::open(&config, tempdir.path().to_str().unwrap()).unwrap());
 
 	{
 		let mut rebuilder = StateRebuilder::new(new_db.clone(), Algorithm::OverlayRecent);
@@ -181,7 +183,8 @@ fn checks_flag() {
 	let tempdir = TempDir::new("").unwrap();
 	let db_path = tempdir.path().join("db");
 	{
-		let new_db = Arc::new(Database::open(&db_path.to_string_lossy(), ::db::NUM_COLUMNS.unwrap()).unwrap());
+		let config = DatabaseConfig::new(::db::NUM_COLUMNS.unwrap());
+		let new_db = Arc::new(Database::open(&config, &db_path.to_string_lossy()).unwrap());
 		let mut rebuilder = StateRebuilder::new(new_db.clone(), Algorithm::OverlayRecent);
 		let reader = PackedReader::new(&snap_file).unwrap().unwrap();
 

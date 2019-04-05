@@ -54,7 +54,7 @@ extern crate log;
 #[cfg(test)]
 extern crate env_logger;
 #[cfg(test)]
-extern crate kvdb_rocksdb;
+extern crate kvdb_lmdb;
 
 #[cfg(feature = "accounts")]
 extern crate ethcore_accounts as accounts;

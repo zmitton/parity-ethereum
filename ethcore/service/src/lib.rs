@@ -40,7 +40,7 @@ mod service;
 mod stop_guard;
 
 #[cfg(test)]
-extern crate kvdb_rocksdb;
+extern crate kvdb_lmdb;
 
 pub use error::{Error, ErrorKind};
 pub use service::{ClientService, PrivateTxService};
