@@ -16,6 +16,7 @@
 
 extern crate kvdb_lmdb;
 extern crate ethcore_blockchain;
+extern crate migration_rocksdb;
 
 use std::{io, fs};
 use std::sync::Arc;
@@ -26,14 +27,9 @@ use kvdb::KeyValueDB;
 use self::ethcore_blockchain::{BlockChainDBHandler, BlockChainDB};
 use self::kvdb_lmdb::{Database as Lmdb, DatabaseConfig};
 
-mod blooms;
+mod migration;
 
-
-/// Migrates the database.
-pub fn migrate(path: &Path) -> Result<(), String> {
-	debug!(target: "lmdb", "migration isn't implemented yet");
-	Ok(())
-}
+pub use self::migration::migrate;
 
 struct AppDB {
 	key_value: Arc<KeyValueDB>,

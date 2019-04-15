@@ -23,14 +23,16 @@ extern crate macros;
 
 extern crate kvdb;
 extern crate kvdb_rocksdb;
+extern crate kvdb_lmdb;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{fs, io, error};
 
-use kvdb::DBTransaction;
-use kvdb_rocksdb::{CompactionProfile, Database, DatabaseConfig};
+use kvdb::{DBTransaction, KeyValueDB, NumColumns, ChangeColumns as EditColumns};
+use kvdb_rocksdb::{Database as RocksDB, DatabaseConfig as RocksDBConfig};
+use kvdb_lmdb::{Database as Lmdb, DatabaseConfig as LmdbConfig};
 
 fn other_io_err<E>(e: E) -> io::Error where E: Into<Box<error::Error + Send + Sync>> {
 	io::Error::new(io::ErrorKind::Other, e)
@@ -41,15 +43,12 @@ fn other_io_err<E>(e: E) -> io::Error where E: Into<Box<error::Error + Send + Sy
 pub struct Config {
 	/// Defines how many elements should be migrated at once.
 	pub batch_size: usize,
-	/// Database compaction profile.
-	pub compaction_profile: CompactionProfile,
 }
 
 impl Default for Config {
 	fn default() -> Self {
 		Config {
 			batch_size: 1024,
-			compaction_profile: Default::default(),
 		}
 	}
 }
@@ -72,7 +71,7 @@ impl Batch {
 	}
 
 	/// Insert a value into the batch, committing if necessary.
-	pub fn insert(&mut self, key: Vec<u8>, value: Vec<u8>, dest: &mut Database) -> io::Result<()> {
+	pub fn insert(&mut self, key: Vec<u8>, value: Vec<u8>, dest: &mut MigratableDB) -> io::Result<()> {
 		self.inner.insert(key, value);
 		if self.inner.len() == self.batch_size {
 			self.commit(dest)?;
@@ -81,7 +80,7 @@ impl Batch {
 	}
 
 	/// Commit all the items in the batch to the given database.
-	pub fn commit(&mut self, dest: &mut Database) -> io::Result<()> {
+	pub fn commit(&mut self, dest: &mut MigratableDB) -> io::Result<()> {
 		if self.inner.is_empty() { return Ok(()) }
 
 		let mut transaction = DBTransaction::new();
@@ -107,7 +106,7 @@ pub trait Migration: 'static {
 	/// Version of the database after the migration.
 	fn version(&self) -> u32;
 	/// Migrate a source to a destination.
-	fn migrate(&mut self, source: Arc<Database>, config: &Config, destination: &mut Database, col: Option<u32>) -> io::Result<()>;
+	fn migrate(&mut self, source: Arc<MigratableDB>, config: &Config, destination: &mut MigratableDB, col: Option<u32>) -> io::Result<()>;
 }
 
 /// A simple migration over key-value pairs of a single column.
@@ -130,14 +129,11 @@ impl<T: SimpleMigration> Migration for T {
 
 	fn alters_existing(&self) -> bool { true }
 
-	fn migrate(&mut self, source: Arc<Database>, config: &Config, dest: &mut Database, col: Option<u32>) -> io::Result<()> {
+	fn migrate(&mut self, source: Arc<MigratableDB>, config: &Config, dest: &mut MigratableDB, col: Option<u32>) -> io::Result<()> {
 		let migration_needed = col == SimpleMigration::migrated_column_index(self);
 		let mut batch = Batch::new(config, col);
 
-		let iter = match source.iter(col) {
-			Some(iter) => iter,
-			None => return Ok(()),
-		};
+		let iter = source.iter(col);
 
 		for (key, value) in iter {
 			if migration_needed {
@@ -168,7 +164,7 @@ impl Migration for ChangeColumns {
 	fn columns(&self) -> Option<u32> { self.post_columns }
 	fn version(&self) -> u32 { self.version }
 	fn alters_existing(&self) -> bool { false }
-	fn migrate(&mut self, _: Arc<Database>, _: &Config, _: &mut Database, _: Option<u32>) -> io::Result<()> {
+	fn migrate(&mut self, _: Arc<MigratableDB>, _: &Config, _: &mut MigratableDB, _: Option<u32>) -> io::Result<()> {
 		Ok(())
 	}
 }
@@ -206,6 +202,12 @@ impl TempIndex {
 	}
 }
 
+/// KeyValueDB + NumColumns + EditColumns
+pub trait MigratableDB: KeyValueDB + NumColumns + EditColumns {}
+
+impl MigratableDB for RocksDB {}
+impl MigratableDB for Lmdb {}
+
 /// Manages database migration.
 pub struct Manager {
 	config: Config,
@@ -216,7 +218,7 @@ impl Manager {
 	/// Creates new migration manager with given configuration.
 	pub fn new(config: Config) -> Self {
 		Manager {
-			config: config,
+			config,
 			migrations: vec![],
 		}
 	}
@@ -247,11 +249,11 @@ impl Manager {
 		let columns = migrations.get(0).and_then(|m| m.pre_columns());
 
 		trace!(target: "migration", "Expecting database to contain {:?} columns", columns);
-		let mut db_config = DatabaseConfig {
+		let mut db_config = RocksDBConfig {
 			max_open_files: 64,
 			memory_budget: None,
-			compaction: config.compaction_profile,
-			columns: columns,
+			compaction: Default::default(),
+			columns,
 		};
 
 		let db_root = database_path(old_path);
@@ -260,7 +262,7 @@ impl Manager {
 
 		// start with the old db.
 		let old_path_str = old_path.to_str().ok_or_else(|| other_io_err("Migration impossible."))?;
-		let mut cur_db = Arc::new(Database::open(&db_config, old_path_str)?);
+		let mut cur_db: Arc<MigratableDB> = Arc::new(RocksDB::open(&db_config, old_path_str)?);
 
 		for migration in migrations {
 			trace!(target: "migration", "starting migration to version {}", migration.version());
@@ -274,13 +276,16 @@ impl Manager {
 
 				// open the target temporary database.
 				let temp_path_str = temp_path.to_str().ok_or_else(|| other_io_err("Migration impossible."))?;
-				let mut new_db = Database::open(&db_config, temp_path_str)?;
+				let lmdb_config = LmdbConfig::new(db_config.columns.unwrap_or_default());
+				let mut new_db = Lmdb::open(&lmdb_config, temp_path_str)?;
 
 				match current_columns {
 					// migrate only default column
 					None => migration.migrate(cur_db.clone(), &config, &mut new_db, None)?,
 					Some(v) => {
-						// Migrate all columns in previous DB
+						// Migrate all columns in previous DB,
+						// including the default one.
+						migration.migrate(cur_db.clone(), &config, &mut new_db, None)?;
 						for col in 0..v {
 							migration.migrate(cur_db.clone(), &config, &mut new_db, Some(col))?
 						}
@@ -296,11 +301,11 @@ impl Manager {
 				// migrations which simply add or remove column families.
 				// we can do this in-place.
 				let goal_columns = migration.columns().unwrap_or(0);
-				while cur_db.num_columns() < goal_columns {
+				while cur_db.num_columns() < goal_columns as usize {
 					cur_db.add_column().map_err(other_io_err)?;
 				}
 
-				while cur_db.num_columns() > goal_columns {
+				while cur_db.num_columns() > goal_columns as usize {
 					cur_db.drop_column().map_err(other_io_err)?;
 				}
 			}
