@@ -20,7 +20,7 @@ use std::path::Path;
 use ethereum_types::Bloom;
 use ethcore::error::Error;
 use rlp;
-use super::{open_db};
+use super::open_db;
 
 const LOG_BLOOMS_ELEMENTS_PER_INDEX: u64 = 16;
 

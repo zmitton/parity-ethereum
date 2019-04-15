@@ -27,6 +27,7 @@ use kvdb::KeyValueDB;
 use self::ethcore_blockchain::{BlockChainDBHandler, BlockChainDB};
 use self::kvdb_lmdb::{Database as Lmdb, DatabaseConfig};
 
+mod blooms;
 mod migration;
 
 pub use self::migration::migrate;
