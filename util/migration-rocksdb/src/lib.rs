@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{fs, io, error};
 
-use kvdb::{DBTransaction, KeyValueDB, NumColumns, ChangeColumns as EditColumns};
+use kvdb::{DBTransaction, DBOp, KeyValueDB, NumColumns, ChangeColumns as EditColumns};
 use kvdb_rocksdb::{Database as RocksDB, DatabaseConfig as RocksDBConfig};
 use kvdb_lmdb::{Database as Lmdb, DatabaseConfig as LmdbConfig};
 
@@ -55,7 +55,7 @@ impl Default for Config {
 
 /// A batch of key-value pairs to be written into the database.
 pub struct Batch {
-	inner: BTreeMap<Vec<u8>, Vec<u8>>,
+	inner: DBTransaction,
 	batch_size: usize,
 	column: Option<u32>,
 }
@@ -64,7 +64,7 @@ impl Batch {
 	/// Make a new batch with the given config.
 	pub fn new(config: &Config, col: Option<u32>) -> Self {
 		Batch {
-			inner: BTreeMap::new(),
+			inner: DBTransaction::with_capacity(config.batch_size),
 			batch_size: config.batch_size,
 			column: col,
 		}
@@ -72,8 +72,9 @@ impl Batch {
 
 	/// Insert a value into the batch, committing if necessary.
 	pub fn insert(&mut self, key: Vec<u8>, value: Vec<u8>, dest: &mut MigratableDB) -> io::Result<()> {
-		self.inner.insert(key, value);
+		self.inner.put(self.column, &key, &value);
 		if self.inner.len() == self.batch_size {
+			trace!(target: "migration", "Committing batch for col {:?}: {}", self.column, self.stats());
 			self.commit(dest)?;
 		}
 		Ok(())
@@ -81,21 +82,35 @@ impl Batch {
 
 	/// Commit all the items in the batch to the given database.
 	pub fn commit(&mut self, dest: &mut MigratableDB) -> io::Result<()> {
-		if self.inner.is_empty() { return Ok(()) }
+		if self.inner.len() == 0 { return Ok(()) }
 
-		let mut transaction = DBTransaction::new();
+		dest.write(
+			std::mem::replace(
+				&mut self.inner,
+				DBTransaction::with_capacity(self.batch_size)))
+	}
 
-		for keypair in &self.inner {
-			transaction.put(self.column, &keypair.0, &keypair.1);
-		}
+	pub fn stats(&self) -> String {
+		let (key_len, val_len, max, min) =
+			&self.inner.ops().fold((0, 0, 0, 100), |stats, op| {
+				match *op {
+					DBOp::Insert {ref key, ref value, ..} => {
+						let k = stats.0 + key.len();
+						let v = stats.1 + value.len();
+						let max = if value.len() > stats.2 { value.len() } else { stats.2 };
+						let min = if value.len() < stats.3 { value.len() } else { stats.3 };
+						(k, v, max, min)
+					},
+					_ => stats
+				}
+		});
 
-		self.inner.clear();
-		dest.write(transaction)
+		format!("avg key len: {}, avg val len: {}, max: {}, min: {}: ", key_len/&self.batch_size, val_len/&self.batch_size, max, min)
 	}
 }
 
 /// A generalized migration from the given db to a destination db.
-pub trait Migration: 'static {
+pub trait Migration: 'static + std::fmt::Debug {
 	/// Number of columns in the database before the migration.
 	fn pre_columns(&self) -> Option<u32> { self.columns() }
 	/// Number of columns in database after the migration.
@@ -122,12 +137,12 @@ pub trait SimpleMigration: 'static {
 	fn simple_migrate(&mut self, key: Vec<u8>, value: Vec<u8>) -> Option<(Vec<u8>, Vec<u8>)>;
 }
 
-impl<T: SimpleMigration> Migration for T {
+impl<T: SimpleMigration + std::fmt::Debug> Migration for T {
 	fn columns(&self) -> Option<u32> { SimpleMigration::columns(self) }
 
-	fn version(&self) -> u32 { SimpleMigration::version(self) }
-
 	fn alters_existing(&self) -> bool { true }
+
+	fn version(&self) -> u32 { SimpleMigration::version(self) }
 
 	fn migrate(&mut self, source: Arc<MigratableDB>, config: &Config, dest: &mut MigratableDB, col: Option<u32>) -> io::Result<()> {
 		let migration_needed = col == SimpleMigration::migrated_column_index(self);
@@ -150,6 +165,7 @@ impl<T: SimpleMigration> Migration for T {
 }
 
 /// An even simpler migration which just changes the number of columns.
+#[derive(Debug)]
 pub struct ChangeColumns {
 	/// The amount of columns before this migration.
 	pub pre_columns: Option<u32>,
@@ -162,8 +178,8 @@ pub struct ChangeColumns {
 impl Migration for ChangeColumns {
 	fn pre_columns(&self) -> Option<u32> { self.pre_columns }
 	fn columns(&self) -> Option<u32> { self.post_columns }
-	fn version(&self) -> u32 { self.version }
 	fn alters_existing(&self) -> bool { false }
+	fn version(&self) -> u32 { self.version }
 	fn migrate(&mut self, _: Arc<MigratableDB>, _: &Config, _: &mut MigratableDB, _: Option<u32>) -> io::Result<()> {
 		Ok(())
 	}
@@ -241,7 +257,7 @@ impl Manager {
 	pub fn execute(&mut self, old_path: &Path, version: u32) -> io::Result<PathBuf> {
 		let config = self.config.clone();
 		let migrations = self.migrations_from(version);
-		trace!(target: "migration", "Total migrations to execute for version {}: {}", version, migrations.len());
+		trace!(target: "migration", "Total migrations to execute for version {}: {} ({:?})", version, migrations.len(), migrations);
 		if migrations.is_empty() {
 			return Err(other_io_err("Migration impossible"));
 		};
@@ -272,6 +288,7 @@ impl Manager {
 
 			// slow migrations: alter existing data.
 			if migration.alters_existing() {
+				trace!(target: "migration", "Slow migrations: alter existing data.");
 				temp_path = temp_idx.path(&db_root);
 
 				// open the target temporary database.

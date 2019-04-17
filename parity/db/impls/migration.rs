@@ -57,10 +57,11 @@ const CURRENT_VERSION: u32 = 14;
 /// A version of database at which blooms-db was introduced
 const BLOOMS_DB_VERSION: u32 = 13;
 /// Defines how many items are migrated to the new version of database at once.
-const BATCH_SIZE: usize = 1024;
+const BATCH_SIZE: usize = 1024*1024;
 /// Version file name.
 const VERSION_FILE_NAME: &'static str = "db_version";
 
+#[derive(Debug)]
 pub struct FromScratchMigration {
 	pre_columns: Option<u32>,
 	post_columns: Option<u32>,
@@ -72,9 +73,9 @@ impl Migration for FromScratchMigration {
 
 	fn columns(&self) -> Option<u32> { self.post_columns }
 
-	fn version(&self) -> u32 { self.version }
-
 	fn alters_existing(&self) -> bool { true }
+
+	fn version(&self) -> u32 { self.version }
 
 	fn migrate(&mut self, source: Arc<MigratableDB>, config: &MigrationConfig, dest: &mut MigratableDB, col: Option<u32>) -> io::Result<()> {
 		let mut batch = Batch::new(config, col);
@@ -88,7 +89,7 @@ impl Migration for FromScratchMigration {
 }
 
 
-/// Migration related erorrs.
+/// Migration related errors.
 #[derive(Debug)]
 pub enum Error {
 	/// Returned when current version cannot be read or guessed.
@@ -99,7 +100,7 @@ pub enum Error {
 	MigrationImpossible,
 	/// Blooms-db migration error.
 	BloomsDB(ethcore::error::Error),
-	/// Migration was completed succesfully,
+	/// Migration was completed successfully,
 	/// but there was a problem with io.
 	Io(IoError),
 }

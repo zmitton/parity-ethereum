@@ -148,8 +148,8 @@ members = [
 [patch.crates-io]
 heapsize = { git = "https://github.com/cheme/heapsize.git", branch = "ec-macfix" }
 # TODO: remove when kvdb-lmdb 0.1 is released
-kvdb = { git = "https://github.com/paritytech/parity-common", branch = "ao-lmdb" }
-kvdb-lmdb = { git = "https://github.com/paritytech/parity-common", branch = "ao-lmdb" }
+kvdb = { git = "https://github.com/paritytech/parity-common", branch = "dp-lmdb" }
+kvdb-lmdb = { git = "https://github.com/paritytech/parity-common", branch = "dp-lmdb" }
 # For migration
-kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", branch = "ao-lmdb" }
-kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", branch = "ao-lmdb" }
+kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", branch = "dp-lmdb" }
+kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", branch = "dp-lmdb" }

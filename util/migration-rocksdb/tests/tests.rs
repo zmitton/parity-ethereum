@@ -104,6 +104,7 @@ impl SimpleMigration for Migration1 {
 	}
 }
 
+#[derive(Debug)]
 struct AddsColumn;
 
 impl Migration for AddsColumn {
