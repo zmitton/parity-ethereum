@@ -1,5 +1,5 @@
 [package]
-description = "Ethcore DB access utilities"
+description = "Parity Ethereum (EthCore) Database Access & Utilities, Database Cache Manager"
 homepage = "http://parity.io"
 license = "GPL-3.0"
 name = "ethcore-db"

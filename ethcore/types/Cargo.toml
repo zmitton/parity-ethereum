@@ -1,6 +1,6 @@
 [package]
-name = "common-types"
 description = "Common types used throughout the codebase"
+name = "common-types"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 

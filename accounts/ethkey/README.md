@@ -1,6 +1,6 @@
 ## ethkey-cli
 
-Parity Ethereum keys generator.
+Parity Ethereum Keys Generator.
 
 ### Usage
 
