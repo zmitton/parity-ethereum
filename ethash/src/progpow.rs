@@ -375,6 +375,7 @@ pub fn progpow(
 	// Initialize mix for all lanes
   let mut hasher = Sha3::keccak256();
 
+println!("NEEDS TO BE HERE");
 
 
 
@@ -395,6 +396,10 @@ pub fn progpow(
   for i in 0..8{
     hashme[32+i] = nonce.to_be_bytes()[i]; // big endian bytes
   }
+  for i in 0..40{
+    println!("{}",hashme[i]);
+  }
+
   hasher.input(&hashme);
 
   let mut res = [0; 32];

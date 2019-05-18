@@ -134,6 +134,7 @@ pub fn quick_get_difficulty(header_hash: &H256, nonce: u64, mix_hash: &H256, pro
 		if progpow {
 			let seed = keccak_f800_short(*header_hash, nonce, [0u32; 8]);
 			keccak_f800_long(*header_hash, seed, mem::transmute(*mix_hash))
+      //XXX TODO 
 		} else {
 			// This is safe - the `keccak_512` call below reads the first 40 bytes (which we explicitly set
 			// with two `copy_nonoverlapping` calls) but writes the first 64, and then we explicitly write
