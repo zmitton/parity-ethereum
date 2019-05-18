@@ -314,6 +314,7 @@ impl Engine<EthereumMachine> for Arc<Ethash> {
 
 	fn verify_block_basic(&self, header: &Header) -> Result<(), Error> {
 		// check the seal fields.
+    /*
 		let seal = Seal::parse_seal(header.seal())?;
 
 		// TODO: consider removing these lines.
@@ -332,11 +333,13 @@ impl Engine<EthereumMachine> for Arc<Ethash> {
 		if &difficulty < header.difficulty() {
 			return Err(From::from(BlockError::InvalidProofOfWork(OutOfBounds { min: Some(header.difficulty().clone()), max: None, found: difficulty })));
 		}
+    */
 
 		Ok(())
 	}
 
 	fn verify_block_unordered(&self, header: &Header) -> Result<(), Error> {
+    /*
 		let seal = Seal::parse_seal(header.seal())?;
 
 		let result = self.pow.compute_light(header.number() as u64, &header.bare_hash().0, seal.nonce.low_u64());
@@ -355,6 +358,7 @@ impl Engine<EthereumMachine> for Arc<Ethash> {
 		if &difficulty < header.difficulty() {
 			return Err(From::from(BlockError::InvalidProofOfWork(OutOfBounds { min: Some(header.difficulty().clone()), max: None, found: difficulty })));
 		}
+    */
 		Ok(())
 	}
 
