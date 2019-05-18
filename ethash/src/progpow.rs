@@ -30,9 +30,22 @@
 //! ProgPoW audits have been proposed to analyse the efficiency of a ProgPoW ASICs over
 //! GPUs and analysis of the economic impact on the Ethereum protocol.
 
+extern crate crypto;
+
+
+
+use std::str;
+use std::io::{self, Write};
+
 use compute::{FNV_PRIME, calculate_dag_item};
 use keccak::H256;
 use shared::{ETHASH_ACCESSES, ETHASH_MIX_BYTES, Node, get_data_size};
+
+//use self::sha3::{Digest, Sha3_256};
+use self::crypto::digest::Digest;
+use self::crypto::sha3::Sha3;
+
+
 
 const PROGPOW_CACHE_BYTES: usize = 16 * 1024;
 const PROGPOW_CACHE_WORDS: usize = PROGPOW_CACHE_BYTES / 4;
@@ -360,10 +373,21 @@ pub fn progpow(
 	// remainder check in `progpow_loop`.
 	assert!(data_size > 0);
 	// Initialize mix for all lanes
-  let digest = keccak_f800_long(header_hash, nonce, result);
-	// NOTE: transmute from `[u32; 8]` to `[u8; 32]`
-	let result = unsafe { ::std::mem::transmute(result) };
-	(digest, result)
+  let mut hasher = Sha3::keccak256();
+  let mut res1 = [0u8; 32];
+  let digest1 = hasher.result(&mut res1);
+
+  print!("hello world");
+  print!("{:?}",res1);
+
+    hasher.input(&header_hash);
+  let bytes: [u8; 8] = unsafe { std::mem::transmute( nonce.to_be()) }; // or .to_le()
+
+  hasher.input(&bytes);
+
+  let mut res = [0; 32];
+  let digest = hasher.result(&mut res);
+	(res, res)
 }
 
 pub fn generate_cdag(cache: &[Node]) -> CDag {

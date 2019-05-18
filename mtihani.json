@@ -4,7 +4,7 @@
 	"engine": {
 		"Ethash": {
 			"params": {
-				"minimumDifficulty": "0x020000",
+				"minimumDifficulty": "0x000000000001",
 				"difficultyBoundDivisor": "0x0800",
 				"durationLimit": "0x0d",
 				"blockReward": "0x4563918244F40000",
@@ -42,7 +42,7 @@
 				"mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
 			}
 		},
-		"difficulty": "0x200000",
+		"difficulty": "0x000001",
 		"author": "0x0000000000000000000000000000000000000000",
 		"timestamp": "0x00",
 		"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
