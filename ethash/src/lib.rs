@@ -44,11 +44,6 @@ mod cache;
 mod keccak;
 mod shared;
 
-#[cfg(feature = "bench")]
-pub mod progpow;
-#[cfg(not(feature = "bench"))]
-mod progpow;
-
 pub use cache::{NodeCacheBuilder, OptimizeFor};
 pub use compute::{ProofOfWork, quick_get_difficulty, slow_hash_block_number};
 use compute::Light;
@@ -74,16 +69,16 @@ pub struct EthashManager {
 	nodecache_builder: NodeCacheBuilder,
 	cache: Mutex<LightCache>,
 	cache_dir: PathBuf,
-	progpow_transition: u64,
+	keccak_transition: u64,
 }
 
 impl EthashManager {
 	/// Create a new new instance of ethash manager
-	pub fn new<T: Into<Option<OptimizeFor>>>(cache_dir: &Path, optimize_for: T, progpow_transition: u64) -> EthashManager {
+	pub fn new<T: Into<Option<OptimizeFor>>>(cache_dir: &Path, optimize_for: T, keccak_transition: u64) -> EthashManager {
 		EthashManager {
 			cache_dir: cache_dir.to_path_buf(),
-			nodecache_builder: NodeCacheBuilder::new(optimize_for.into().unwrap_or_default(), progpow_transition),
-			progpow_transition: progpow_transition,
+			nodecache_builder: NodeCacheBuilder::new(optimize_for.into().unwrap_or_default(), keccak_transition),
+			keccak_transition: keccak_transition,
 			cache: Mutex::new(LightCache {
 				recent_epoch: None,
 				recent: None,
@@ -102,8 +97,8 @@ impl EthashManager {
 		let epoch = block_number / ETHASH_EPOCH_LENGTH;
 		let light = {
 			let mut lights = self.cache.lock();
-			let light = if block_number == self.progpow_transition {
-				// we need to regenerate the cache to trigger algorithm change to progpow inside `Light`
+			let light = if block_number == self.keccak_transition {
+				// we need to regenerate the cache to trigger algorithm change to keccak inside `Light`
 				None
 			} else {
 				match lights.recent_epoch.clone() {

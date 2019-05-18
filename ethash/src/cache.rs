@@ -69,7 +69,7 @@ pub struct NodeCacheBuilder {
 	// TODO: Remove this locking and just use an `Rc`?
 	seedhash: Arc<Mutex<SeedHashCompute>>,
 	optimize_for: OptimizeFor,
-	progpow_transition: u64,
+	keccak_transition: u64,
 }
 
 // TODO: Abstract the "optimize for" logic
@@ -83,18 +83,18 @@ pub struct NodeCache {
 
 impl NodeCacheBuilder {
 	pub fn light(&self, cache_dir: &Path, block_number: u64) -> Light {
-		Light::new_with_builder(self, cache_dir, block_number, self.progpow_transition)
+		Light::new_with_builder(self, cache_dir, block_number, self.keccak_transition)
 	}
 
 	pub fn light_from_file(&self, cache_dir: &Path, block_number: u64) -> io::Result<Light> {
-		Light::from_file_with_builder(self, cache_dir, block_number, self.progpow_transition)
+		Light::from_file_with_builder(self, cache_dir, block_number, self.keccak_transition)
 	}
 
-	pub fn new<T: Into<Option<OptimizeFor>>>(optimize_for: T, progpow_transition: u64) -> Self {
+	pub fn new<T: Into<Option<OptimizeFor>>>(optimize_for: T, keccak_transition: u64) -> Self {
 		NodeCacheBuilder {
 			seedhash: Arc::new(Mutex::new(SeedHashCompute::default())),
 			optimize_for: optimize_for.into().unwrap_or_default(),
-			progpow_transition
+			keccak_transition
 		}
 	}
 

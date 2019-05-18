@@ -19,9 +19,10 @@
 
 // TODO: fix endianess for big endian
 
+use keccak::hash::keccak_256;
+
 use keccak::{keccak_512, keccak_256, H256};
 use cache::{NodeCache, NodeCacheBuilder};
-use progpow::{CDag, generate_cdag, progpow, keccak_f800_short, keccak_f800_long};
 use seed_compute::SeedHashCompute;
 use shared::*;
 use std::io;
@@ -43,7 +44,7 @@ pub struct ProofOfWork {
 
 enum Algorithm {
 	Hashimoto,
-	Progpow(Box<CDag>),
+	KeccakBlock
 }
 
 pub struct Light {
@@ -58,12 +59,12 @@ impl Light {
 		builder: &NodeCacheBuilder,
 		cache_dir: &Path,
 		block_number: u64,
-		progpow_transition: u64,
+		keccak_transition: u64,
 	) -> Self {
 		let cache = builder.new_cache(cache_dir.to_path_buf(), block_number);
 
-		let algorithm = if block_number >= progpow_transition {
-			Algorithm::Progpow(Box::new(generate_cdag(cache.as_ref())))
+		let algorithm = if block_number >= keccak_transition {
+			Algorithm::KeccakBlock
 		} else {
 			Algorithm::Hashimoto
 		};
@@ -76,15 +77,15 @@ impl Light {
 	/// `nonce` - The nonce to pack into the mix
 	pub fn compute(&self, header_hash: &H256, nonce: u64, block_number: u64) -> ProofOfWork {
 		match self.algorithm {
-			Algorithm::Progpow(ref c_dag) => {
-				let (value, mix_hash) = progpow(
+			Algorithm::KeccakBlock => {
+				let (value) = keccak_256(
 					*header_hash,
 					nonce,
 					block_number,
-					self.cache.as_ref(),
-					c_dag,
+					self.cache.as_ref()
 				);
 
+        let mix_hash = 0;
 				ProofOfWork { value, mix_hash }
 			},
 			Algorithm::Hashimoto => light_compute(self, header_hash, nonce),
@@ -96,12 +97,12 @@ impl Light {
 		builder: &NodeCacheBuilder,
 		cache_dir: &Path,
 		block_number: u64,
-		progpow_transition: u64,
+		keccak_transition: u64,
 	) -> io::Result<Self> {
 		let cache = builder.from_file(cache_dir.to_path_buf(), block_number)?;
 
-		let algorithm = if block_number >= progpow_transition {
-			Algorithm::Progpow(Box::new(generate_cdag(cache.as_ref())))
+		let algorithm = if block_number >= keccak_transition {
+			Algorithm::KeccakBlock
 		} else {
 			Algorithm::Hashimoto
 		};
