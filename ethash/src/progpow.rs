@@ -34,8 +34,8 @@ extern crate crypto;
 
 
 
-use std::str;
-use std::io::{self, Write};
+//use std::str;
+////use std::io::{self, Write};
 
 use compute::{FNV_PRIME, calculate_dag_item};
 use keccak::H256;
@@ -374,16 +374,28 @@ pub fn progpow(
 	assert!(data_size > 0);
 	// Initialize mix for all lanes
   let mut hasher = Sha3::keccak256();
+
+
+
+
+/*
+  let mut hasher1 = Sha3::keccak256();
   let mut res1 = [0u8; 32];
-  let digest1 = hasher.result(&mut res1);
+  let digest1 = hasher1.result(&mut res1);
+  println!("{:?}", res1);
+*/
 
-  print!("hello world");
-  print!("{:?}",res1);
 
-    hasher.input(&header_hash);
-  let bytes: [u8; 8] = unsafe { std::mem::transmute( nonce.to_be()) }; // or .to_le()
 
-  hasher.input(&bytes);
+  //need u8 array that is H256 long ( 8*32 ) plus 8*8 so 40 bytes
+  let mut hashme = [0u8; 40];
+  for i in 0..32{
+    hashme[i] = header_hash[i];
+  }
+  for i in 0..8{
+    hashme[32+i] = nonce.to_be_bytes()[i]; // big endian bytes
+  }
+  hasher.input(&hashme);
 
   let mut res = [0; 32];
   let digest = hasher.result(&mut res);
