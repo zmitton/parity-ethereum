@@ -359,46 +359,10 @@ pub fn progpow(
 	// NOTE: This assert is required to aid the optimizer elide the non-zero
 	// remainder check in `progpow_loop`.
 	assert!(data_size > 0);
-
 	// Initialize mix for all lanes
-	let seed = keccak_f800_short(header_hash, nonce, result);
-
-	for l in 0..mix.len() {
-		mix[l] = fill_mix(seed, l as u32);
-	}
-
-	// Execute the randomly generated inner loop
-	let period = block_number / PROGPOW_PERIOD_LENGTH as u64;
-	for i in 0..PROGPOW_CNT_DAG {
-		progpow_loop(
-			period,
-			i,
-			&mut mix,
-			cache,
-			c_dag,
-			data_size,
-		);
-	}
-
-	// Reduce mix data to a single per-lane result
-	for l in 0..lane_results.len() {
-		lane_results[l] = FNV_HASH;
-		for i in 0..PROGPOW_REGS {
-			lane_results[l] = fnv1a_hash(lane_results[l], mix[l][i]);
-		}
-	}
-
-	// Reduce all lanes to a single 128-bit result
-	result = [FNV_HASH; 8];
-	for l in 0..PROGPOW_LANES {
-		result[l % 8] = fnv1a_hash(result[l % 8], lane_results[l]);
-	}
-
-	let digest = keccak_f800_long(header_hash, seed, result);
-
+  let digest = keccak_f800_long(header_hash, nonce, result);
 	// NOTE: transmute from `[u32; 8]` to `[u8; 32]`
 	let result = unsafe { ::std::mem::transmute(result) };
-
 	(digest, result)
 }
 
