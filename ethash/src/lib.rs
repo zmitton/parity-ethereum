@@ -45,7 +45,7 @@ mod keccak;
 mod shared;
 
 pub use cache::{NodeCacheBuilder, OptimizeFor};
-pub use compute::{ProofOfWork, quick_get_difficulty, slow_hash_block_number};
+pub use compute::{ProofOfWork,  slow_hash_block_number};
 use compute::Light;
 use ethereum_types::{U256, U512};
 use keccak::H256;

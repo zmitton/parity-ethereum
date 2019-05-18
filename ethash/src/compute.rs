@@ -124,40 +124,6 @@ fn fnv_hash(x: u32, y: u32) -> u32 {
 	return x.wrapping_mul(FNV_PRIME) ^ y;
 }
 
-/// Difficulty quick check for POW preverification
-///
-/// `header_hash`      The hash of the header
-/// `nonce`            The block's nonce
-/// `mix_hash`         The mix digest hash
-/// Boundary recovered from mix hash
-pub fn quick_get_difficulty(header_hash: &H256, nonce: u64, mix_hash: &H256, progpow: bool) -> H256 {
-	unsafe {
-		if progpow {
-			let seed = keccak_f800_short(*header_hash, nonce, [0u32; 8]);
-			keccak_f800_long(*header_hash, seed, mem::transmute(*mix_hash))
-		} else {
-			// This is safe - the `keccak_512` call below reads the first 40 bytes (which we explicitly set
-			// with two `copy_nonoverlapping` calls) but writes the first 64, and then we explicitly write
-			// the next 32 bytes before we read the whole thing with `keccak_256`.
-			//
-			// This cannot be elided by the compiler as it doesn't know the implementation of
-			// `keccak_512`.
-			let mut buf: [u8; 64 + 32] = mem::uninitialized();
-
-			ptr::copy_nonoverlapping(header_hash.as_ptr(), buf.as_mut_ptr(), 32);
-			ptr::copy_nonoverlapping(&nonce as *const u64 as *const u8, buf[32..].as_mut_ptr(), 8);
-
-			keccak_512::unchecked(buf.as_mut_ptr(), 64, buf.as_ptr(), 40);
-			ptr::copy_nonoverlapping(mix_hash.as_ptr(), buf[64..].as_mut_ptr(), 32);
-
-			// This is initialized in `keccak_256`
-			let mut hash: [u8; 32] = mem::uninitialized();
-			keccak_256::unchecked(hash.as_mut_ptr(), hash.len(), buf.as_ptr(), buf.len());
-
-			hash
-		}
-	}
-}
 
 /// Calculate the light client data
 /// `light` - The light client handler
@@ -397,13 +363,11 @@ mod test {
 			0x4a, 0x8e, 0x95, 0x69, 0xef, 0xc7, 0xd7, 0x1b, 0x33, 0x35, 0xdf, 0x36, 0x8c, 0x9a,
 			0xe9, 0x7e, 0x53, 0x84,
 		];
-		assert_eq!(quick_get_difficulty(&hash, nonce, &mix_hash, false)[..], boundary_good[..]);
 		let boundary_bad = [
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x3a, 0x9b, 0x6c, 0x69, 0xbc, 0x2c, 0xe2, 0xa2,
 			0x4a, 0x8e, 0x95, 0x69, 0xef, 0xc7, 0xd7, 0x1b, 0x33, 0x35, 0xdf, 0x36, 0x8c, 0x9a,
 			0xe9, 0x7e, 0x53, 0x84,
 		];
-		assert!(quick_get_difficulty(&hash, nonce, &mix_hash, false)[..] != boundary_bad[..]);
 	}
 
 	#[test]
