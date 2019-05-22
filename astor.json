@@ -1,12 +1,12 @@
 {
-	"name": "Mtihani",
-	"dataDir": "mtihani",
+	"name": "Astor",
+	"dataDir": "astor",
 	"engine": {
 		"Ethash": {
 			"params": {
-				"minimumDifficulty": "0x000000001000",
+				"minimumDifficulty": "0x000000111100",
 				"difficultyBoundDivisor": "0x0800",
-				"durationLimit": "0x0d",
+				"durationLimit": "0x0f",
 				"blockReward": "0x4563918244F40000",
 				"homesteadTransition": "0x0",
 				"bombDefuseTransition": "0x0",
@@ -21,8 +21,8 @@
 		"accountStartNonce": "0x00",
 		"maximumExtraDataSize": "0x20",
 		"minGasLimit": "0x1388",
-		"networkID": "0x4715",
-		"chainID": "0x4715",
+		"networkID": "0x4d",
+		"chainID": "0x4d",
 		"eip150Transition": "0x0",
 		"eip155Transition": "0x0",
 		"eip98Transition": "0x7fffffffffffff",
@@ -50,7 +50,7 @@
 		"gasLimit": "0x1000000"
 	},
 	"nodes": [
-    "enode://be7fe20c39f834e9dd05b901facc5dde7b3a6b1e02418b9ea3981c00c0a07327d1080f1f620ea1741ac536cceb9c337117049f4013a5a136b386a4f05140543c@172.20.7.215:30303"
+    "enode://d16060ee7cb2be0485201936a77eb2bab61f7da17af1749a04867086db563a932a451dcac09ad393a68c376041af00580caecdd1ec3be9869e11f254e558c0d9@142.93.157.142:30303"
 	],
 	"accounts": {
 		"0000000000000000000000000000000000000001": { "builtin": { "name": "ecrecover", "pricing": { "linear": { "base": 3000, "word": 0 } } } },
