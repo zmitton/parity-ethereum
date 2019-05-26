@@ -4,7 +4,7 @@
 	"engine": {
 		"Ethash": {
 			"params": {
-				"minimumDifficulty": "0x000000000001",
+				"minimumDifficulty": "0x000001010001",
 				"difficultyBoundDivisor": "0x0800",
 				"durationLimit": "0x0f",
 				"blockReward": "0x4563918244F40000",
@@ -21,8 +21,8 @@
 		"accountStartNonce": "0x00",
 		"maximumExtraDataSize": "0x20",
 		"minGasLimit": "0x1388",
-		"networkID": "0x4715",
-		"chainID": "0x4715",
+		"networkID": "0x4d",
+		"chainID": "0x4d",
 		"eip150Transition": "0x0",
 		"eip155Transition": "0x0",
 		"eip98Transition": "0x7fffffffffffff",
